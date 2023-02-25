@@ -7,21 +7,25 @@ import { Node } from "./node";
 interface SyllableCharToNameMap extends CharToNameMap {
   /* eslint-disable  @typescript-eslint/naming-convention */
   "\u{05B0}": "SHEVA"; // HEBREW POINT HATAF SHEVA (U+05B0)
+  "\u{FB35}": "SHUREQ"; // HEBREW LETTER VAV WITH DAGESH (U+FB35)
 }
 
 const sylCharToNameMap: SyllableCharToNameMap = {
   ...charToNameMap,
-  "\u{05B0}": "SHEVA"
+  "\u{05B0}": "SHEVA",
+  "\u{FB35}": "SHUREQ"
 };
 
 interface SyllableNameToCharMap extends NameToCharMap {
   /* eslint-disable  @typescript-eslint/naming-convention */
   SHEVA: "\u{05B0}"; // HEBREW POINT HATAF SHEVA (U+05B0)
+  SHUREQ: "\u{FB35}"; // HEBREW LETTER VAV WITH DAGESH (U+FB35)
 }
 
 const sylNameToCharMap: SyllableNameToCharMap = {
   ...nameToCharMap,
-  SHEVA: "\u{05B0}"
+  SHEVA: "\u{05B0}",
+  SHUREQ: "\u{FB35}"
 };
 
 /**
@@ -106,7 +110,8 @@ export class Syllable extends Node<Syllable> {
    * Returns the vowel character of the syllable
    *
    * According to {@page Syllabification}, a sheva is a vowel and serves as the nucleus of a syllable.
-   * Unlike `Cluster`, a `Syllable` is concerned with linguistics, so a sheva **is** a vowel character
+   * Unlike `Cluster`, a `Syllable` is concerned with linguistics, so a sheva **is** a vowel character.
+   * Similarly, a shureq is a vowel character here, unlike `Cluster`.
    *
    * ```typescript
    * const text: Text = new Text("הַֽ֭יְחָבְרְךָ");
@@ -114,18 +119,24 @@ export class Syllable extends Node<Syllable> {
    * // "\u{05B7}"
    * text.syllables[1].vowel;
    * // "\u{05B0}"
+   * 
+   * const shureqText: Text = new Text("שׁוּרֶק");
+   * shureqText.syllables[0].vowel;
+   * // "\u{FB35}"
    * ```
    */
   get vowel(): keyof SyllableCharToNameMap | null {
     const match = this.text.match(vowelsCaptureGroupWithSheva);
-    return match ? (match[0] as keyof SyllableCharToNameMap) : match;
+    if (match) return match[0] as keyof SyllableCharToNameMap;
+    return this.clusters.some(c => c.isShureq) ? sylNameToCharMap.SHUREQ : null;
   }
 
   /**
    * Returns the vowel character name of the syllable
    *
    * According to {@page Syllabification}, a sheva is a vowel and serves as the nucleus of a syllable.
-   * Unlike `Cluster`, a `Syllable` is concerned with linguistics, so a sheva **is** a vowel character
+   * Unlike `Cluster`, a `Syllable` is concerned with linguistics, so a sheva **is** a vowel character.
+   * Similarly, a shureq is a vowel character here, unlike `Cluster`.
    *
    * ```typescript
    * const text: Text = new Text("הַֽ֭יְחָבְרְךָ");
@@ -133,6 +144,10 @@ export class Syllable extends Node<Syllable> {
    * // "PATAH"
    * text.syllables[1].vowelName;
    * // "SHEVA"
+   * 
+   * const shureqText: Text = new Text("שׁוּרֶק");
+   * shureqText.syllables[0].vowelName;
+   * // "SHUREQ"
    * ```
    */
   get vowelName(): SyllableCharToNameMap[keyof SyllableCharToNameMap] | null {
@@ -141,11 +156,14 @@ export class Syllable extends Node<Syllable> {
   }
 
   /**
-   * Returns `true` if syllables contains the vowel character of the name passed in
+   * Returns `true` if the syllable contains the vowel character of the name passed in
    *
    * According to {@page Syllabification}, a sheva is a vowel and serves as the nucleus of a syllable.
    * Unlike `Cluster`, a `Syllable` is concerned with linguistics, so a sheva **is** a vowel character.
    * It returns `true` for "SHEVA" only when the sheva is the vowel (i.e. a vocal sheva or sheva na').
+   * 
+   * Similarly, a shureq is a vowel character here, unlike `Cluster`. It returns true for "SHUREQ"
+   * only when there is a cluster with `Cluster.isShureq` equal to true and no other vowel.
    *
    * ```typescript
    * const text: Text = new Text("הַיְחָבְרְךָ");
@@ -159,10 +177,21 @@ export class Syllable extends Node<Syllable> {
    * // test for silent sheva
    * text.syllables[2].hasVowelName("SHEVA");
    * // false
+   * 
+   * // test for shureq
+   * const shureqText: Text = new Text("שׁוּרֶק");
+   * shureqText.syllables[0].hasVowelName("SHUREQ");
+   * // true
+   * 
+   * // test for vav dagesh which is not a shureq
+   * const vavDageshText: Text = new Text("גֵּוּ");
+   * shureqText.syllables[0].hasVowelName("SHUREQ");
+   * // false
    * ```
    */
   hasVowelName(name: keyof SyllableNameToCharMap): boolean {
     if (!sylNameToCharMap[name]) throw new Error(`${name} is not a valid value`);
+    if (name === "SHUREQ") return this.vowelName === "SHUREQ";
     const isShevaSilent = name === "SHEVA" && this.clusters.filter((c) => c.hasVowel).length ? true : false;
     return !isShevaSilent && this.text.indexOf(sylNameToCharMap[name]) !== -1 ? true : false;
   }
