@@ -1,5 +1,50 @@
 # Changelog
 
+## 2024-02-20 0.22.0
+
+- Add option for `shevaWithMeteg` (PR #156)
+
+## 2024-02-15 0.21.2
+
+- Fix issue with תְִּירָא֑וּם being syllabified (PR #154, PR #153)
+
+## 2024-01-19 0.21.1
+
+- Ensures when a sheva is under a pair of identical consonants it is vocal, unless the vowel is short (PR #152)
+
+## 2024-01-17 0.21.0
+
+- Have `Word` extend `Node` class (PR #151)
+
+## 2023-12-30 0.20.1
+
+- Removes stress from final syllable when the Word is in construct. (PR #150)
+
+## 2023-12-29 0.20.0
+
+- Add `Word.isInConstruct` (PR #149)
+
+## 2023-12-29 0.19.5
+
+- Improve how accents are handled (PR #148)
+
+## 2023-10-31 0.19.4
+
+- Fix telisha qetana being incorrectly marked as accented (PR #146)
+- Fix vowel character being extracted in mixed script syllables (PR #145)
+
+## 2023-10-31 0.19.3
+
+- Fix issues with caching for `Syllable.structure` (PR #144)
+
+## 2023-10-30 0.19.2
+
+- Fix `vowel`, `vowelName`, and `hasVowelName` props on the `Syllable` that were broken in v0.19.1 (PR #143)
+
+## 2023-10-29 0.19.1
+
+- Fix how shureq is handled for Syllable props vowel, vowelName, and hasVowelName (Issue #141)
+
 ## 2023-07-07 0.19.0
 
 - Add parent property on children (PR #135)

@@ -33,8 +33,8 @@ export interface SylOpts {
    * @defaultValue true
    * @example
    * ```ts
-   * const default = new Text("הַיְאֹ֗ר");
-   * default.syllables.map(syl => syl.text);
+   * const usingDefault = new Text("הַיְאֹ֗ר");
+   * usingDefault.syllables.map(syl => syl.text);
    * // ["הַ", "יְ", "אֹ֗ר"]
    *
    * const optional = new Text("הַיְאֹ֗ר", { article: false });
@@ -93,8 +93,8 @@ export interface SylOpts {
    * @defaultValue true
    * @example
    * ```ts
-   * const default = new Text("יָדְךָ");
-   * default.syllables.map(syl => syl.text);
+   * const usingDefault = new Text("יָדְךָ");
+   * usingDefault.syllables.map(syl => syl.text);
    * // ["יָ", "דְ", "ךָ"]
    *
    * const optional = new Text("יָדְךָ", { longVowels: false });
@@ -114,7 +114,7 @@ export interface SylOpts {
    * @example
    * ```ts
    * const qQRegx = /\u{05C7}/u;
-   * const default = new Text("חָפְנִי֙");
+   * const usingDefault = new Text("חָפְנִי֙");
    * qQRegx.test(default.text);
    * // true
    *
@@ -130,8 +130,8 @@ export interface SylOpts {
    * @defaultValue true
    * @example
    * ```ts
-   * const default = new Text("יְדַֽעְיָה");
-   * default.syllables.map((s) => ({ text: s.text, isClosed: s.isClosed }));
+   * const usingDefault = new Text("יְדַֽעְיָה");
+   * usingDefault.syllables.map((s) => ({ text: s.text, isClosed: s.isClosed }));
    * // [
    * //    { text: 'יְ', isClosed: false },
    * //    { text: 'דַֽ', isClosed: false },
@@ -150,13 +150,36 @@ export interface SylOpts {
    */
   shevaAfterMeteg?: boolean;
   /**
+   * determines whether to regard a sheva with a meteg as a _sheva na'_. This is also called a sheva ga'ya.
+   *
+   * @defaultValue true
+   * @example
+   * ```ts
+   * const usingDefault = new Text("אַ֥שְֽׁרֵי");
+   * usingusingDefault.syllables.map((s) => ({ text: s.text, isClosed: s.isClosed }));
+   * // [
+   * //  { text: 'אַ֥', isClosed: false },
+   * //  { text: 'שְֽׁ', isClosed: false },
+   * //  { text: 'רֵי', isClosed: false }
+   * // ]
+   *
+   * const optional = new Text("אַ֥שְֽׁרֵי", { shevaWithMeteg: false });
+   * optional.syllables.map((s) => ({ text: s.text, isClosed: s.isClosed }));
+   * // [
+   * //  { text: 'אַ֥שְֽׁ', isClosed: true },
+   * //  { text: 'רֵי', isClosed: false }
+   * // ]
+   * ```
+   */
+  shevaWithMeteg?: boolean;
+  /**
    * determines whether to regard the sheva under the letters שׁשׂסצנמלוי when preceded by a waw-consecutive with a missing dagesh chazaq as a _sheva na'_, unless preceded by a meteg (see {@link shevaAfterMeteg}).
    *
    * @defaultValue true
    * @example
    * ```ts
-   * const default = new Text("וַיְצַחֵק֙");
-   * default.syllables.map(syl => syl.text);
+   * const usingDefault = new Text("וַיְצַחֵק֙");
+   * usingDefault.syllables.map(syl => syl.text);
    * // ["וַ", "יְ", "צַ", "חֵק֙"]
    *
    * const optional = new Text("וַיְצַחֵק֙", { sqnmlvy: false });
@@ -191,8 +214,8 @@ export interface SylOpts {
    * @defaultValue true
    * @example
    * ```ts
-   * const default = new Text("וּלְמַזֵּר");
-   * default.syllables.map(syl => syl.text);
+   * const usingDefault = new Text("וּלְמַזֵּר");
+   * usingDefault.syllables.map(syl => syl.text);
    * // "וּ", "לְ", "מַ", "זֵּר"]
    *
    * const optional = new Text("וּלְמַזֵּר", { wawShureq: false });
@@ -244,6 +267,7 @@ export class Text {
       "longVowels",
       "qametsQatan",
       "shevaAfterMeteg",
+      "shevaWithMeteg",
       "sqnmlvy",
       "strict",
       "wawShureq"
@@ -271,6 +295,7 @@ export class Text {
       longVowels: validOpts.longVowels ?? true,
       qametsQatan: validOpts.qametsQatan ?? true,
       shevaAfterMeteg: validOpts.shevaAfterMeteg ?? true,
+      shevaWithMeteg: validOpts.shevaWithMeteg ?? true,
       sqnmlvy: validOpts.sqnmlvy ?? true,
       strict: validOpts.strict ?? true,
       wawShureq: validOpts.wawShureq ?? true
@@ -332,6 +357,9 @@ export class Text {
     const split = this.sanitized.split(splitGroup);
     const groups = split.filter((group) => group);
     const words = groups.map((word) => new Word(word, this.options));
+    const [first, ...rest] = words;
+    first.siblings = rest;
+
     return words;
   }
 

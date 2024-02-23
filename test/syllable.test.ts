@@ -20,11 +20,17 @@ describe.each`
 });
 
 describe.each`
-  description                     | hebrew              | syllableNum | vowelName   | result
-  ${"syllable with patah"}        | ${"הַֽ֭יְחָבְרְךָ"} | ${0}        | ${"PATAH"}  | ${true}
-  ${"syllable with sheva"}        | ${"הַֽ֭יְחָבְרְךָ"} | ${1}        | ${"SHEVA"}  | ${true}
-  ${"syllable with silent sheva"} | ${"הַֽ֭יְחָבְרְךָ"} | ${2}        | ${"SHEVA"}  | ${false}
-  ${"syllable with qamats"}       | ${"הַֽ֭יְחָבְרְךָ"} | ${2}        | ${"QAMATS"} | ${true}
+  description                                    | hebrew              | syllableNum | vowelName   | result
+  ${"syllable with patah"}                       | ${"הַֽ֭יְחָבְרְךָ"} | ${0}        | ${"PATAH"}  | ${true}
+  ${"syllable with sheva"}                       | ${"הַֽ֭יְחָבְרְךָ"} | ${1}        | ${"SHEVA"}  | ${true}
+  ${"syllable with silent sheva"}                | ${"הַֽ֭יְחָבְרְךָ"} | ${2}        | ${"SHEVA"}  | ${false}
+  ${"syllable with qamats"}                      | ${"הַֽ֭יְחָבְרְךָ"} | ${2}        | ${"QAMATS"} | ${true}
+  ${"syllable with shureq"}                      | ${"תִגְּע֖וּ"}      | ${2}        | ${"SHUREQ"} | ${true}
+  ${"syllable with vav and dagesh (not shureq)"} | ${"הַוּֽוֹת׃"}      | ${1}        | ${"SHUREQ"} | ${false}
+  ${"syllable with tsere-yod"}                   | ${"קָדְשֵׁ֧י"}      | ${1}        | ${"TSERE"}  | ${true}
+  ${"syllable with holam-vav"}                   | ${"בַּיּ֣וֹם"}      | ${1}        | ${"HOLAM"}  | ${true}
+  ${"syllable with hiriq-yod"}                   | ${"אָנֹֽכִי"}       | ${2}        | ${"HIRIQ"}  | ${true}
+  ${"syllable with mixed chars"}                 | ${"rˁִː֣"}          | ${0}        | ${"HIRIQ"}  | ${true}
 `("hasVowelName:", ({ description, hebrew, syllableNum, vowelName, result }) => {
   const heb = new Text(hebrew);
   const syllable = heb.syllables[syllableNum];
@@ -96,12 +102,40 @@ describe.each`
   });
 });
 
+describe("structure cache", () => {
+  const str = "סַפִּ֖יר";
+  test("without gemination", () => {
+    const heb = new Text(str);
+    const syllable = heb.syllables[0];
+    // first call to structure() will cache the result
+    // but use the opposite of what is being tested
+    syllable.structure(true);
+    const [syllableOnset, syllableNucleus, syllableCoda] = ["ס", "ַ", ""];
+    expect(syllable.structure()).toEqual([syllableOnset, syllableNucleus, syllableCoda]);
+  });
+
+  test("with gemination", () => {
+    const heb = new Text(str);
+    const syllable = heb.syllables[0];
+    // first call to structure() will cache the result
+    // but use the opposite of what is being tested
+    syllable.structure();
+    const [syllableOnset, syllableNucleus, syllableCoda] = ["ס", "ַ", "פּ"];
+    expect(syllable.structure(true)).toEqual([syllableOnset, syllableNucleus, syllableCoda]);
+  });
+});
+
 describe.each`
-  description                     | hebrew              | syllableNum | vowel         | allowNoNiqqud
-  ${"syllable with patah"}        | ${"הַֽ֭יְחָבְרְךָ"} | ${0}        | ${"\u{05B7}"} | ${false}
-  ${"syllable with sheva"}        | ${"הַֽ֭יְחָבְרְךָ"} | ${1}        | ${"\u{05B0}"} | ${false}
-  ${"syllable with silent sheva"} | ${"הַֽ֭יְחָבְרְךָ"} | ${2}        | ${"\u{05B8}"} | ${false}
-  ${"syllable with none"}         | ${"test"}           | ${0}        | ${null}       | ${true}
+  description                     | hebrew              | syllableNum | vowel                 | allowNoNiqqud
+  ${"syllable with patah"}        | ${"הַֽ֭יְחָבְרְךָ"} | ${0}        | ${"\u{05B7}"}         | ${false}
+  ${"syllable with sheva"}        | ${"הַֽ֭יְחָבְרְךָ"} | ${1}        | ${"\u{05B0}"}         | ${false}
+  ${"syllable with silent sheva"} | ${"הַֽ֭יְחָבְרְךָ"} | ${2}        | ${"\u{05B8}"}         | ${false}
+  ${"syllable with none"}         | ${"test"}           | ${0}        | ${null}               | ${true}
+  ${"syllable with shureq"}       | ${"תִגְּע֖וּ"}      | ${2}        | ${"\u{05D5}\u{05BC}"} | ${false}
+  ${"syllable with tsere-yod"}    | ${"קָדְשֵׁ֧י"}      | ${1}        | ${"\u{05B5}"}         | ${false}
+  ${"syllable with holam-vav"}    | ${"בַּיּ֣וֹם"}      | ${1}        | ${"\u{05B9}"}         | ${false}
+  ${"syllable with hiriq-yod"}    | ${"אָנֹֽכִי"}       | ${2}        | ${"\u{05B4}"}         | ${false}
+  ${"syllable with mixed chars"}  | ${"rˁִː֣"}          | ${0}        | ${"\u{05B4}"}         | ${false}
 `("vowel:", ({ description, hebrew, syllableNum, vowel, allowNoNiqqud }) => {
   // normally don't use `allowNoNiqqud` in testing, but needed to get `null`
   const heb = new Text(hebrew, { allowNoNiqqud });
@@ -120,6 +154,11 @@ describe.each`
   ${"syllable with sheva"}        | ${"הַֽ֭יְחָבְרְךָ"} | ${1}        | ${"SHEVA"}  | ${false}
   ${"syllable with silent sheva"} | ${"הַֽ֭יְחָבְרְךָ"} | ${2}        | ${"QAMATS"} | ${false}
   ${"syllable with none"}         | ${"test"}           | ${0}        | ${null}     | ${true}
+  ${"syllable with shureq"}       | ${"תִגְּע֖וּ"}      | ${2}        | ${"SHUREQ"} | ${false}
+  ${"syllable with tsere-yod"}    | ${"קָדְשֵׁ֧י"}      | ${1}        | ${"TSERE"}  | ${false}
+  ${"syllable with holam-vav"}    | ${"בַּיּ֣וֹם"}      | ${1}        | ${"HOLAM"}  | ${false}
+  ${"syllable with hiriq-yod"}    | ${"אָנֹֽכִי"}       | ${2}        | ${"HIRIQ"}  | ${false}
+  ${"syllable with mixed chars"}  | ${"rˁִː֣"}          | ${0}        | ${"HIRIQ"}  | ${true}
 `("vowelName:", ({ description, hebrew, syllableNum, vowelName, allowNoNiqqud }) => {
   // normally don't use `allowNoNiqqud` in testing, but needed to get `null`
   const heb = new Text(hebrew, { allowNoNiqqud });

@@ -81,15 +81,17 @@ describe.each`
 });
 
 describe.each`
-  description              | word           | syllables                | isClosedArr              | longVowelsOpt | qametsQatanOpt
-  ${"regular qamets"}      | ${"יָדְךָ"}    | ${["יָ", "דְ", "ךָ"]}    | ${[false, false, false]} | ${true}       | ${true}
-  ${"regular qamets"}      | ${"יָדְךָ"}    | ${["יָדְ", "ךָ"]}        | ${[true, false]}         | ${false}      | ${true}
-  ${"qamets qatan"}        | ${"חָפְנִי"}   | ${["חׇפְ", "נִי"]}       | ${[true, false]}         | ${true}       | ${true}
-  ${"qamets qatan"}        | ${"חָפְנִי"}   | ${["חׇפְ", "נִי"]}       | ${[true, false]}         | ${false}      | ${true}
-  ${"qamets qatan"}        | ${"חָפְנִי"}   | ${["חָ", "פְ", "נִי"]}   | ${[false, false, false]} | ${true}       | ${false}
-  ${"qamets qatan"}        | ${"חָפְנִי"}   | ${["חָפְ", "נִי"]}       | ${[true, false]}         | ${false}      | ${false}
-  ${"holem male"}          | ${"הוֹלְכִים"} | ${["הֹו", "לְ", "כִים"]} | ${[false, false, true]}  | ${true}       | ${true}
-  ${"holem male w/ false"} | ${"הוֹלְכִים"} | ${["הֹולְ", "כִים"]}     | ${[true, true]}          | ${false}      | ${true}
+  description                                                       | word           | syllables                | isClosedArr              | longVowelsOpt | qametsQatanOpt
+  ${"regular qamets"}                                               | ${"יָדְךָ"}    | ${["יָ", "דְ", "ךָ"]}    | ${[false, false, false]} | ${true}       | ${true}
+  ${"regular qamets"}                                               | ${"יָדְךָ"}    | ${["יָדְ", "ךָ"]}        | ${[true, false]}         | ${false}      | ${true}
+  ${"qamets qatan"}                                                 | ${"חָפְנִי"}   | ${["חׇפְ", "נִי"]}       | ${[true, false]}         | ${true}       | ${true}
+  ${"qamets qatan"}                                                 | ${"חָפְנִי"}   | ${["חׇפְ", "נִי"]}       | ${[true, false]}         | ${false}      | ${true}
+  ${"qamets qatan"}                                                 | ${"חָפְנִי"}   | ${["חָ", "פְ", "נִי"]}   | ${[false, false, false]} | ${true}       | ${false}
+  ${"qamets qatan"}                                                 | ${"חָפְנִי"}   | ${["חָפְ", "נִי"]}       | ${[true, false]}         | ${false}      | ${false}
+  ${"holem male"}                                                   | ${"הוֹלְכִים"} | ${["הֹו", "לְ", "כִים"]} | ${[false, false, true]}  | ${true}       | ${true}
+  ${"holem male w/ false"}                                          | ${"הוֹלְכִים"} | ${["הֹולְ", "כִים"]}     | ${[true, true]}          | ${false}      | ${true}
+  ${"sheva after long vowel and under two indentical consonants"}   | ${"סָבְב֥וּ"}  | ${["סָ", "בְ", "ב֥וּ"]}  | ${[false, false, false]} | ${false}      | ${true}
+  ${"sheva after short vowel and under two  indentical consonants"} | ${"הִנְנִי֩"}  | ${["הִנְ", "נִי֩"]}      | ${[true, false]}         | ${false}      | ${true}
 `("longVowels:", ({ description, word, syllables, isClosedArr, longVowelsOpt, qametsQatanOpt }) => {
   const text = new Text(word, { longVowels: longVowelsOpt, qametsQatan: qametsQatanOpt });
   const sylText = text.syllables.map((syl) => syl.text);
@@ -273,6 +275,25 @@ describe.each`
 );
 
 describe.each`
+  description                  | word            | syllables                 | isClosedArr              | shevaWithMetegOpt
+  ${"medial sheva with meteg"} | ${"אַ֥שְֽׁרֵי"} | ${["אַ֥שְֽׁ", "רֵי"]}     | ${[true, false]}         | ${false}
+  ${"medial sheva with meteg"} | ${"אַ֥שְֽׁרֵי"} | ${["אַ֥", "שְֽׁ", "רֵי"]} | ${[false, false, false]} | ${true}
+`("shevaWithMeteg:", ({ description, word, syllables, isClosedArr, shevaWithMetegOpt }) => {
+  const text = new Text(word, { shevaWithMeteg: shevaWithMetegOpt });
+  const sylText = text.syllables.map((syl) => syl.text);
+  const isClosed = text.syllables.map((syl) => syl.isClosed);
+  describe(description, () => {
+    test(`shevaWithMeteg is ${shevaWithMetegOpt}`, () => {
+      expect(sylText).toEqual(syllables);
+    });
+
+    test(`isClosed`, () => {
+      expect(isClosed).toEqual(isClosedArr);
+    });
+  });
+});
+
+describe.each`
   description                            | word                | strict
   ${"threw hasShortVowel error"}         | ${"אלִי"}           | ${true}
   ${"threw hasShortVowel error"}         | ${"אלִי"}           | ${false}
@@ -299,6 +320,7 @@ describe.each`
   ${"medial segol yod"}     | ${"אֱלֹהֶ֑יךָ"}   | ${false} | ${["אֱ", "לֹ", "הֶ֑י", "ךָ"]}
   ${"medial shureq"}        | ${"רוּחַ"}        | ${false} | ${["רוּ", "חַ"]}
   ${"medial shureq"}        | ${"רוּחַ"}        | ${true}  | ${["רוּ", "חַ"]}
+  ${"sheva and hiriq"}      | ${"תְִּירָא֑וּם"} | ${false} | ${["תְִּי", "רָ", "א֑וּם"]}
 `("strict, correct syls:", ({ description, word, strict, syllables }) => {
   describe(description, () => {
     test(`${word}`, () => {

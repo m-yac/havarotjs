@@ -120,7 +120,24 @@ const groupShevas = (arr: Mixed, options: SylOpts): Mixed => {
     }
 
     const clusterHasSheva = cluster.hasSheva;
-    if (!shevaPresent && clusterHasSheva) {
+
+    if (clusterHasSheva && cluster.hasMeteg && options.shevaWithMeteg) {
+      syl.unshift(cluster);
+      syl = shevaNewSyllable(syl);
+      continue;
+    }
+    const consonant = cluster.chars[0].text;
+    const prevConsonant = arr[index - 1]?.chars[0].text || "";
+    const nextClusterVowel = arr[index + 1];
+    // We also need to check if this cluster and the previous cluster are different consonants
+    // because if they are the same consonant (and the previous vowel is not short), then the sheva will be vocal.
+    // e.g. "סָבְב֥וּ" is [ 'סָ', 'בְ', 'ב֥וּ' ], but "הִנְנִי֩" is [ 'הִנְ', 'נִי֩' ] b/c of the short vowel.
+    // Also remember that prev and next are switched because we are iterating backwards.
+    if (
+      !shevaPresent &&
+      clusterHasSheva &&
+      (consonant !== prevConsonant || (nextClusterVowel instanceof Cluster && nextClusterVowel.hasShortVowel))
+    ) {
       shevaPresent = true;
       syl.unshift(cluster);
       continue;
@@ -245,10 +262,14 @@ const groupMaters = (arr: Mixed, strict: boolean = true): Mixed => {
 
       if (nxt instanceof Syllable) {
         const word = arr.map((i) => i.text).join("");
-        throw new Error(`Syllable ${nxt.text} should not precede a Cluster with a Mater in ${word}`);
+        if (strict) {
+          throw new Error(`Syllable ${nxt.text} should not precede a Cluster with a Mater in ${word}`);
+        } else {
+          syl.unshift(...nxt.clusters);
+        }
+      } else {
+        syl.unshift(nxt);
       }
-
-      if (nxt) syl.unshift(nxt);
 
       syl = materNewSyllable(syl);
       index++;
@@ -355,6 +376,9 @@ const setIsClosed = (syllable: Syllable, index: number, arr: Syllable[]) => {
 };
 
 const setIsAccented = (syllable: Syllable) => {
+  if (syllable.isAccented) {
+    return;
+  }
   // TODO: this is pretty hacky, but it works; find a more elegant solution
   const jerusalemFinal = /\u{5B4}\u{05DD}/u;
   const jerusalemPrev = /ל[\u{5B8}\u{5B7}]/u;
@@ -364,8 +388,59 @@ const setIsAccented = (syllable: Syllable) => {
     return;
   }
 
-  // if final syllable has a pashta character
-  // it may not necessarily be the accented syllable
+  /**
+   * Note: Miqra Al Pi HaMesorah (MAPM) has "accent helpers".
+   * Often if the taam is not placed on the accented syllable,
+   * then a taam is added on the previous/next, accented syllable.
+   *
+   * E.g.: עַל־יֹאשִׁיָּ֒הוּ֒
+   *
+   * Because it is not entirely possible to ascertain stress from just the taamim,
+   * it is best to MAPM because of the aforementioned "accent helpers".
+   */
+
+  const segolta = /\u{0592}/u;
+  if (segolta.test(syllable.text)) {
+    // see לָֽאָדָם֒ as an example of segolta on the final syllable
+    if (syllable.isFinal && prev) {
+      // see יֹאשִׁיָּ֒הוּ֒ as an example of segolta on a previous syllable
+      while (prev) {
+        if (segolta.test(prev.text)) {
+          prev.isAccented = true;
+          return;
+        }
+        prev = (prev?.prev?.value as Syllable) ?? null;
+      }
+    }
+
+    // if the segolta is not final, then it is the accented syllable
+    // though, it was likely already accented in the while loop above
+    syllable.isAccented = true;
+    return;
+  }
+
+  // note that a zarqa is incorrectly encoded as "zinor" in the Unicode spec
+  const zarqa = /\u{05AE}/u;
+  // a zarqa's "helper" in MAPM
+  // see more https://forums.accordancebible.com/topic/31576-zinor-and-zarqa-accents/#comment-156318
+  const zarqaHelper = /\u{0598}/u;
+
+  if (zarqa.test(syllable.text)) {
+    // see לָֽאָדָם֒ as an example of zarqa on the final syllable
+    // a zarqa should always be on the final syllable
+    if (syllable.isFinal && prev) {
+      // see וַיֹּ֘אמֶר֮ as an example of zarqa helper on a previous syllable
+      while (prev) {
+        if (zarqaHelper.test(prev.text)) {
+          prev.isAccented = true;
+          return;
+        }
+        prev = (prev?.prev?.value as Syllable) ?? null;
+      }
+    }
+  }
+
+  // postpositive
   // check if any preceding syllable has a pashta or qadma character
   const pashta = /\u{0599}/u;
   const sylText = syllable.text;
@@ -378,6 +453,39 @@ const setIsAccented = (syllable: Syllable) => {
       prev = (prev?.prev?.value as Syllable) ?? null;
     }
   }
+
+  // postpositive
+  const telishaQetana = /\u{05A9}/u;
+  if (telishaQetana.test(syllable.text)) {
+    while (prev) {
+      if (telishaQetana.test(prev.text)) {
+        prev.isAccented = true;
+        return;
+      }
+      prev = (prev?.prev?.value as Syllable) ?? null;
+    }
+
+    syllable.isAccented = true;
+    return;
+  }
+
+  // prepositive
+  const teslishaGedola = /\u{05A0}/u;
+  if (teslishaGedola.test(syllable.text)) {
+    let next = syllable.next?.value;
+
+    while (next) {
+      if (teslishaGedola.test(next.text)) {
+        next.isAccented = true;
+        return;
+      }
+      next = (next?.next?.value as Syllable) ?? null;
+    }
+
+    syllable.isAccented = true;
+    return;
+  }
+
   const isAccented = syllable.clusters.filter((cluster) => (cluster.hasTaamim || cluster.hasSilluq ? true : false))
     .length
     ? true
@@ -427,7 +535,7 @@ const reinsertLatin = (syls: Syllable[], latin: { cluster: Cluster; pos: number 
   return syls;
 };
 
-export const syllabify = (clusters: Cluster[], options: SylOpts): Syllable[] => {
+export const syllabify = (clusters: Cluster[], options: SylOpts, isWordInConstruct: boolean): Syllable[] => {
   const removeLatin = clusters.filter((cluster) => !cluster.isNotHebrew);
   const latinClusters = clusters.map(clusterPos).filter((c) => c.cluster.isNotHebrew);
   const groupedClusters = groupClusters(removeLatin, options);
@@ -441,6 +549,12 @@ export const syllabify = (clusters: Cluster[], options: SylOpts): Syllable[] => 
   syllables[syllables.length - 1].isFinal = true;
   syllables.forEach(setIsClosed);
   syllables.forEach(setIsAccented);
+
+  // if there is no accented syllable, then the last syllable is accented
+  // unless that syllable is part of a word in construct
+  if (!syllables.map((s) => s.isAccented).includes(true) && !isWordInConstruct) {
+    syllables[syllables.length - 1].isAccented = true;
+  }
 
   // for each cluster, set its syllable
   syllables.forEach((s) => s.clusters.forEach((c) => (c.syllable = s)));
