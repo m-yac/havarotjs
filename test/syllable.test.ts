@@ -1,6 +1,7 @@
 import { Cluster } from "../src/cluster";
 import { Text } from "../src/index";
 import { Syllable } from "../src/syllable";
+import { Consonant, ConsonantType, Vowel } from "../src/syllablePart";
 
 describe.each`
   description                                          | hebrew         | syllableNum | coda
@@ -102,26 +103,55 @@ describe.each`
   });
 });
 
-describe("structure cache", () => {
+describe("parts/structure cache", () => {
   const str = "סַפִּ֖יר";
-  test("without gemination", () => {
-    const heb = new Text(str);
-    const syllable = heb.syllables[0];
-    // first call to structure() will cache the result
-    // but use the opposite of what is being tested
-    syllable.structure(true);
-    const [syllableOnset, syllableNucleus, syllableCoda] = ["ס", "ַ", ""];
-    expect(syllable.structure()).toEqual([syllableOnset, syllableNucleus, syllableCoda]);
+  const heb = new Text(str);
+  const syllable = heb.syllables[0];
+  const parts = syllable.parts;
+  const structure = syllable.structure;
+
+  const expected_parts = [
+    new Consonant(heb.chars.slice(0, 1), ConsonantType.onsetConsonant),
+    new Vowel(heb.chars.slice(1, 2)),
+    new Consonant(heb.chars.slice(2, 4), ConsonantType.codaGeminatedConsonant)
+  ];
+  const expected_structure = [[expected_parts[0]], [expected_parts[1]], [expected_parts[2]]];
+
+  test("parts has expected value", () => {
+    expect(parts).toEqual(expected_parts);
+    // NB: They are equal, but are not the same reference
+    expect(parts).not.toBe(expected_parts);
   });
 
-  test("with gemination", () => {
-    const heb = new Text(str);
-    const syllable = heb.syllables[0];
-    // first call to structure() will cache the result
-    // but use the opposite of what is being tested
-    syllable.structure();
-    const [syllableOnset, syllableNucleus, syllableCoda] = ["ס", "ַ", "פּ"];
-    expect(syllable.structure(true)).toEqual([syllableOnset, syllableNucleus, syllableCoda]);
+  test("structure has expected value", () => {
+    expect(structure).toEqual(expected_structure);
+    // NB: They are equal, but are not the same reference
+    expect(structure).not.toBe(expected_structure);
+  });
+
+  // If syllable.parts was cached, then any future call to
+  // syllable.parts should return the same reference as the first
+  test("parts is cached", () => {
+    const second_get_of_parts = syllable.parts;
+    expect(second_get_of_parts).toBe(parts);
+  });
+
+  // If syllable.structure was cached, then any future call to
+  // syllable.structure should return the same reference as the first
+  test("structure is cached", () => {
+    const second_get_of_structure = syllable.structure;
+    expect(second_get_of_structure).toBe(structure);
+  });
+
+  // Additionally, the references to the indiviual SyllablePart objects
+  // returned by syllable.parts and syllable.structure should be the
+  // same (assuming no taamim)
+  test("structure and parts caches match", () => {
+    const parts_from_structure = structure.flat(1);
+    expect(parts_from_structure.length).toEqual(parts.length);
+    for (let i = 0; i < parts_from_structure.length; i++) {
+      expect(parts_from_structure[i]).toBe(parts[i]);
+    }
   });
 });
 

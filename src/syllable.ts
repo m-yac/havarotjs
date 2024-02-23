@@ -468,8 +468,9 @@ export class Syllable extends Node<Syllable> {
         }
       }
     }
-    this.#cachedStructure = [onset, nucleus, coda];
-    return [onset, nucleus, coda];
+    const structure: [Consonant[], Vowel[], Consonant[]] = [onset, nucleus, coda];
+    this.#cachedStructure = structure;
+    return structure;
   }
 
   /**
