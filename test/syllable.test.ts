@@ -3,18 +3,18 @@ import { Text } from "../src/index";
 import { Syllable } from "../src/syllable";
 
 describe.each`
-  description                                          | hebrew         | syllableNum | codaWithGemination
+  description                                          | hebrew         | syllableNum | coda
   ${"open syllable followed by gemination"}            | ${"מַדּוּעַ"}  | ${0}        | ${"דּ"}
   ${"open syllable followed by no gemination"}         | ${"מֶלֶךְ"}    | ${0}        | ${""}
-  ${"closed syllable followed by dagesh qal"}          | ${"מַסְגֵּר"}  | ${0}        | ${"סְ"}
+  ${"closed syllable followed by dagesh qal"}          | ${"מַסְגֵּר"}  | ${0}        | ${"ס"}
   ${"open syllable with sheva followed by dagesh qal"} | ${"שְׁתַּיִם"} | ${0}        | ${""}
-`("codaWithGemination:", ({ description, hebrew, syllableNum, codaWithGemination }) => {
+`("coda:", ({ description, hebrew, syllableNum, coda }) => {
   const heb = new Text(hebrew);
   const syllable = heb.syllables[syllableNum];
-  const syllableCodaWithGemination = syllable.codaWithGemination;
+  const syllablecoda = syllable.coda;
   describe(description, () => {
-    test(`codaWithGemination to equal ${codaWithGemination}`, () => {
-      expect(syllableCodaWithGemination).toEqual(codaWithGemination);
+    test(`coda to equal ${coda}`, () => {
+      expect(syllablecoda.map((p) => p.text).join("")).toEqual(coda);
     });
   });
 });
@@ -67,30 +67,31 @@ describe.each`
 });
 
 describe.each`
-  description                                    | hebrew             | syllableNum | onset   | nucleus               | coda
-  ${"closed syllable"}                           | ${"יָ֥ם"}          | ${0}        | ${"י"}  | ${"\u{05B8}\u{05A5}"} | ${"ם"}
-  ${"open syllable"}                             | ${"מַדּוּעַ"}      | ${0}        | ${"מ"}  | ${"\u{05B7}"}         | ${""}
-  ${"syllable with shureq"}                      | ${"מַדּוּעַ"}      | ${1}        | ${"דּ"} | ${"וּ"}               | ${""}
-  ${"syllable with shureq and meteg"}            | ${"רֽוּחַ"}        | ${0}        | ${"רֽ"} | ${"וּ"}               | ${""}
-  ${"syllable with furtive patah"}               | ${"מַדּוּעַ"}      | ${2}        | ${""}   | ${"\u{05B7}"}         | ${"ע"}
-  ${"syllable with furtive patah and sof pasuq"} | ${"מַדּוּעַ׃"}     | ${2}        | ${""}   | ${"\u{05B7}"}         | ${"ע׃"}
-  ${"word-initial shureq"}                       | ${"וּמֶלֶךְ"}      | ${0}        | ${""}   | ${"וּ"}               | ${""}
-  ${"onset cluster (not supported)"}             | ${"שְׁתַּיִם"}     | ${0}        | ${"שׁ"} | ${"\u{05B0}"}         | ${""}
-  ${"Jerusalem w/ patah penultimate syllable"}   | ${"יְרוּשָׁלִַ֗ם"} | ${3}        | ${"ל"}  | ${"\u{05B7}\u{0597}"} | ${""}
-  ${"Jerusalem w/ patah final syllable"}         | ${"יְרוּשָׁלִַ֗ם"} | ${4}        | ${""}   | ${"\u{05B4}"}         | ${"ם"}
-`("structure:", ({ description, hebrew, syllableNum, onset, nucleus, coda }) => {
+  description                                    | hebrew             | syllableNum | onset   | nucleus       | codaNoGemination
+  ${"closed syllable"}                           | ${"יָ֥ם"}          | ${0}        | ${"י"}  | ${"\u{05B8}"} | ${"ם"}
+  ${"open syllable"}                             | ${"מַדּוּעַ"}      | ${0}        | ${"מ"}  | ${"\u{05B7}"} | ${""}
+  ${"syllable with shureq"}                      | ${"מַדּוּעַ"}      | ${1}        | ${"דּ"} | ${"וּ"}       | ${""}
+  ${"syllable with shureq and meteg"}            | ${"רֽוּחַ"}        | ${0}        | ${"ר"}  | ${"וּ"}       | ${""}
+  ${"syllable with furtive patah"}               | ${"מַדּוּעַ"}      | ${2}        | ${""}   | ${"\u{05B7}"} | ${"ע"}
+  ${"syllable with furtive patah and sof pasuq"} | ${"מַדּוּעַ׃"}     | ${2}        | ${""}   | ${"\u{05B7}"} | ${"ע"}
+  ${"word-initial shureq"}                       | ${"וּמֶלֶךְ"}      | ${0}        | ${""}   | ${"וּ"}       | ${""}
+  ${"onset cluster (not supported)"}             | ${"שְׁתַּיִם"}     | ${0}        | ${"שׁ"} | ${"\u{05B0}"} | ${""}
+  ${"Jerusalem w/ patah penultimate syllable"}   | ${"יְרוּשָׁלִַ֗ם"} | ${3}        | ${"ל"}  | ${"\u{05B7}"} | ${""}
+  ${"Jerusalem w/ patah final syllable"}         | ${"יְרוּשָׁלִַ֗ם"} | ${4}        | ${""}   | ${"\u{05B4}"} | ${"ם"}
+`("structure:", ({ description, hebrew, syllableNum, onset, nucleus, codaNoGemination }) => {
   const heb = new Text(hebrew);
   const syllable = heb.syllables[syllableNum];
-  const [syllableOnset, syllableNucleus, syllableCoda] = syllable.structure();
+  const [syllableOnset, syllableNucleus, syllableCoda] = syllable.structure;
+  const syllableCodaNoGemination = syllableCoda.filter((p) => !p.fromGemination);
   describe(description, () => {
     test(`onset to equal ${onset}`, () => {
-      expect(syllableOnset).toEqual(onset);
+      expect(syllableOnset.map((p) => p.text).join("")).toEqual(onset);
     });
     test(`nucleus to equal ${nucleus}`, () => {
-      expect(syllableNucleus).toEqual(nucleus);
+      expect(syllableNucleus.map((p) => p.text).join("")).toEqual(nucleus);
     });
-    test(`coda to equal ${coda}`, () => {
-      expect(syllableCoda).toEqual(coda);
+    test(`codaNoGemination to equal ${codaNoGemination}`, () => {
+      expect(syllableCodaNoGemination.map((p) => p.text).join("")).toEqual(codaNoGemination);
     });
   });
 });

@@ -1,7 +1,8 @@
 import { Cluster } from "./cluster";
 import { Char } from "./char";
+import { SyllablePart, Consonant, Vowel, HebrewMark, NonHebrew, ConsonantType } from "./syllablePart";
 import { CharToNameMap, charToNameMap, NameToCharMap, nameToCharMap } from "./utils/vowelMap";
-import { vowelsCaptureGroupWithSheva } from "./utils/regularExpressions";
+import { vowelsCaptureGroupWithSheva, hebChars } from "./utils/regularExpressions";
 import { Node } from "./node";
 import { Word } from "./word";
 
@@ -244,97 +245,174 @@ export class Syllable extends Node<Syllable> {
   }
 
   /**
+   * @returns the the list of SyllableParts which make up the Syllable, i.e. its Consonants, Vowels, HebrewMarks, and NonHebrew characters.
+   *
+   * ```typescript
+   * const text: Text = new Text("וּמַדּ֖וּעַ");
+   * text.syllables.map((s) => s.parts().map((p) => [p.type, p.text]))
+   * // [
+   * //   [ [ 'V', 'וּ' ] ],
+   * //   [ [ 'C', 'מ' ], [ 'V', 'ַ' ], [ 'C', 'דּ' ] ],
+   * //   [ [ 'C', 'דּ' ], [ 'H', '֖' ], [ 'V', 'וּ' ] ],
+   * //   [ [ 'V', 'ַ' ], [ 'C', 'ע' ] ]
+   * // ]
+   * ```
+   */
+  get parts(): SyllablePart[] {
+    const parts: SyllablePart[] = [];
+    let seenVowel = false;
+    for (let i = 0; i < this.clusters.length; i++) {
+      let chars = this.clusters[i].chars;
+      // Add a shureq as a new Vowel
+      if (this.clusters[i].isShureq) {
+        parts.push(new Vowel(chars.slice(0, 2)));
+        seenVowel = true;
+        chars = chars.slice(2);
+      }
+      // Add a mater as an additional character of the preceding Vowel
+      if (this.clusters[i].isMater) {
+        for (let j = parts.length - 1; j >= 0; j--) {
+          if (parts[j] instanceof Vowel) {
+            parts[j] = new Vowel(parts[j].chars.concat([chars[0]]));
+            seenVowel = true;
+            chars = chars.slice(1);
+            break;
+          }
+        }
+      }
+      // Furtive patah: If the syllable is final, contains only punctuation and
+      // non-hebrew after this cluster, and is either a he with dagesh followed
+      // by a patah or an ayin or het followed by a patah, then add the patah
+      // as a new Vowel first, then the he/ayin/het as a new Consonant after
+      if (this.isFinal && this.clusters.slice(i + 1).every((c) => c.isNotHebrew || c.isPunctuation)) {
+        if (chars.length >= 2 && /\u{05D7}|\u{05E2}/u.test(chars[0].text) && chars[1].text === "\u{05B7}") {
+          parts.push(new Vowel([chars[1]]));
+          seenVowel = true;
+          parts.push(new Consonant([chars[0]], ConsonantType.codaConsonant));
+          chars = chars.slice(2);
+        }
+        if (
+          chars.length >= 3 &&
+          chars[0].text === "\u{05D4}" &&
+          chars[1].text === "\u{05BC}" &&
+          chars[2].text === "\u{05B7}"
+        ) {
+          parts.push(new Vowel([chars[2]]));
+          seenVowel = true;
+          parts.push(new Consonant(chars.slice(0, 2), ConsonantType.codaConsonant));
+          chars = chars.slice(3);
+        }
+      }
+      for (const char of chars) {
+        // Add a consonant character as a new Consonant
+        if (char.sequencePosition === 0) {
+          const cType = seenVowel ? ConsonantType.codaConsonant : ConsonantType.onsetConsonant;
+          parts.push(new Consonant([char], cType));
+        }
+        // Add a consonant ligature as an additional character of the preceding
+        // Consonant, or if there is no such consonant, as a new HebrewMark
+        else if (char.sequencePosition === 1 || char.sequencePosition === 2) {
+          let success = false;
+          for (let j = parts.length - 1; j >= 0; j++) {
+            if (parts[j] instanceof Consonant) {
+              const cType = seenVowel ? ConsonantType.codaConsonant : ConsonantType.onsetConsonant;
+              parts[j] = new Consonant(parts[j].chars.concat([char]), cType);
+              success = true;
+              break;
+            }
+          }
+          if (!success) {
+            parts.push(new HebrewMark([char]));
+          }
+        }
+        // Add a niqqud character which is not a sheva nah (a non-vocal sheva,
+        // i.e. a sheva not in the first cluster) as a new Vowel, and add a
+        // sheva nah as a new HebrewMark
+        else if (char.sequencePosition === 3) {
+          if (char.text === "\u{05B0}" && i > 0) {
+            parts.push(new HebrewMark([char]));
+          } else {
+            parts.push(new Vowel([char]));
+            seenVowel = true;
+          }
+        }
+        // Add any other Hebrew character as a new a HebrewMark
+        else if (hebChars.test(char.text)) {
+          parts.push(new HebrewMark([char]));
+        }
+        // Add anything else as a new NonHebrew SyllablePart
+        else {
+          parts.push(new NonHebrew([char]));
+        }
+      }
+    }
+    // Give every SyllablePart a reference to this Syllable, and compute some
+    // conditions needed for gemination check below
+    let [hasNonShevaVowel, hasConsonantAfterVowel] = [false, false];
+    for (const part of parts) {
+      part.syllable = this;
+      if (part instanceof Vowel && !/\u{05B0}/u.test(part.text)) {
+        hasNonShevaVowel = true;
+      } else if (hasNonShevaVowel && part instanceof Consonant) {
+        hasConsonantAfterVowel = true;
+      }
+    }
+    // If this is a non-final syllable, this syllable has a non-Sheva vowel, the
+    // syllable is open (i.e. there is no consonant after the vowel), and the
+    // first cluster of the next syllable has a dagesh which is not part of a
+    // shureq, then add the consonant and its dagesh from the next syllable as
+    // an additional Consonant (marked as fromGemination)
+    if (
+      !this.isFinal &&
+      hasNonShevaVowel &&
+      !hasConsonantAfterVowel &&
+      this.next instanceof Syllable &&
+      this.next.clusters.length > 0 &&
+      /\u{05BC}/u.test(this.next.clusters[0].text) &&
+      !this.next.clusters[0].isShureq
+    ) {
+      const chars = this.next.clusters[0].chars.filter((c) => c.sequencePosition <= 2);
+      const part = new Consonant(chars, ConsonantType.codaGeminatedConsonant);
+      part.syllable = this;
+      parts.push(part);
+    }
+    return parts;
+  }
+
+  /**
    * @returns the structure of the Syllable, i.e. the syllable's onset, nucleus, and coda.
    * - The onset is any initial consonant of the syllable - present in every syllable except those containing a except word-initial shureq or a furtive patah.
    * - The nucleus is the vowel of the syllable - present in every syllable and containing its {@link vowel} (with any materes lecticonis) or a shureq.
-   * - The coda is all final consonants of the syllable - not including any matres lecticonis, and including the onset of the subsequent syllable if the subsequent syllable is geminated and the `withGemination` argument is `true`.
-   *
-   * @param withGemination If this argument is `true`, include gemination of the next syllable's onset in this syllable's coda.
+   * - The coda is all final consonants of the syllable - not including any matres lecticonis, and including the onset of the subsequent syllable if the subsequent syllable is geminated.
    *
    * ```typescript
-   * const text: Text = new Text("מַדּוּעַ");
-   * text.syllables.map(s => s.structure(true));
-   * // [["מ",
-   * //   "ַ",
-   * //   "דּ"],
-   * //  ["דּ",
-   * //   "וּ",
-   * //   ""],
-   * //  ["",
-   * //   "ַ",
-   * //   "ע"]]
+   * const text: Text = new Text("וּמַדּ֖וּעַ");
+   * text.syllables.map((s) => s.structure.map((st) => st.map((p) => p.text)))
+   * // [
+   * //   [ [], [ 'וּ' ], [] ],
+   * //   [ [ 'מ' ], [ 'ַ' ], [ 'דּ' ] ],
+   * //   [ [ 'דּ' ], [ 'וּ' ], [] ],
+   * //   [ [], [ 'ַ' ], [ 'ע' ] ]
+   * // ]
    * ```
    */
-  structure(withGemination: boolean = false): [string, string, string] {
-    const heClusters = this.clusters.filter((c) => !c.isNotHebrew);
-    if (heClusters.length === 0) {
-      return ["", "", ""];
-    }
-    // Initial shureq: If the syllable starts with a shureq, then it has no
-    // onset, its nucleus is the shureq, and its coda is any remaining clusters
-    const first = heClusters[0];
-    if (first.isShureq) {
-      return [
-        "",
-        first.text,
-        heClusters
-          .slice(1)
-          .map((c) => c.text)
-          .join("")
-      ];
-    }
-    // Furtive patah: If the syllable is final and is either a het, ayin, or he
-    // (with dagesh) followed by a patah, then it has no onset, its nucleus is
-    // the patah and its coda is the consonant
-    if (this.isFinal && !this.isClosed) {
-      const matchFurtive = this.text.match(/(\u{05D7}|\u{05E2}|\u{05D4}\u{05BC})(\u{05B7})(\u{05C3})?$/mu);
-      if (matchFurtive) {
-        return ["", matchFurtive[2], matchFurtive[1] + (matchFurtive[3] || "")];
+  get structure(): [Consonant[], Vowel[], Consonant[]] {
+    const onset: Consonant[] = [];
+    const nucleus: Vowel[] = [];
+    const coda: Consonant[] = [];
+    for (const p of this.parts) {
+      if (p instanceof Consonant) {
+        if (nucleus.length === 0) {
+          onset.push(p);
+        } else {
+          coda.push(p);
+        }
       }
-    }
-    // Otherwise:
-    // 1. The onset is any initial consonant, ligature, dagesh, and/or rafe
-    //    (as defined in char.ts) of the first cluster
-    // 2. The nucleus is any niqqud and/or taamim of the initial cluster plus
-    //    the second cluster if the latter is a shureq or a mater
-    // 3. The coda is all remaining clusters – or if there are none, the
-    //    current syllable has a non-sheva vowel, the first cluster
-    //    of the next syllable has a dagesh, and `withGemination` is `true`,
-    //    then the coda is any initial consonant, ligature, dagesh, and/or
-    //    rafe of the first cluster of the next syllable (i.e. the next
-    //    syllable's dagesh is a dagesh chazaq)
-    let [onset, nucleus, coda] = ["", "", ""];
-    let i = 0;
-    // (add to the onset the sequencePositions: consonants = 0, ligatures = 1, dagesh or rafe = 2, or meteg = \u{05BD})
-    // though meteg is an accent, it is treated as part of the onset
-    for (; i < first.chars.length && (first.chars[i].sequencePosition < 3 || first.chars[i].text === "\u{05BD}"); i++) {
-      onset += first.chars[i].text;
-    }
-    // (add to the nucleus the sequencePositions: niqqud (i.e vowels) = 3, taamim (i.e. accents) = 4)
-    for (; i < first.chars.length && [3, 4].includes(first.chars[i].sequencePosition); i++) {
-      nucleus += first.chars[i].text;
-    }
-    // (add to the coda everything else from the first cluster - e.g. out of order characters)
-    for (; i < first.chars.length; i++) {
-      coda += first.chars[i].text;
-    }
-    // (add to the nucleus add any shureq or mater - if we haven't already added anything to the coda)
-    let clusters_processed = 1;
-    if (coda.length === 0 && heClusters.length > 1 && (heClusters[1].isShureq || heClusters[1].isMater)) {
-      nucleus += heClusters[1].text;
-      clusters_processed++;
-    }
-    // (add to the coda all the remaining clusters)
-    coda += heClusters
-      .slice(clusters_processed)
-      .map((c) => c.text)
-      .join("");
-    // (handle gemination)
-    if (withGemination && coda.length === 0 && !/\u{05B0}/u.test(nucleus)) {
-      if (this.next instanceof Syllable) {
-        const nextOnset = this.next.onset;
-        if (/\u{05BC}/u.test(nextOnset)) {
-          coda = nextOnset;
+      if (p instanceof Vowel) {
+        if (coda.length === 0) {
+          nucleus.push(p);
+        } else {
+          throw new Error("Syllable contains a consonant between two vowels, i.e. does not have (C)V(C) structure");
         }
       }
     }
@@ -344,29 +422,29 @@ export class Syllable extends Node<Syllable> {
   /**
    * Returns the onset of the syllable - see {@link structure}
    */
-  get onset(): string {
-    return this.structure()[0];
+  get onset(): Consonant[] {
+    return this.structure[0];
   }
 
   /**
    * @returns the nucleus of the syllable - see {@link structure}
    */
-  get nucleus(): string {
-    return this.structure()[1];
+  get nucleus(): Vowel[] {
+    return this.structure[1];
   }
 
   /**
-   * @returns the coda of the syllable, ignoring gemination of the following syllable - see {@link structure}
+   * @returns the coda of the syllable, including gemination - see {@link structure}
    */
-  get coda(): string {
-    return this.structure()[2];
+  get coda(): Consonant[] {
+    return this.structure[2];
   }
 
   /**
-   * @returns the coda of the syllable, including gemination of the following syllable - see {@link structure}
+   * @returns the coda of the syllable, ignoring gemination - see {@link structure}
    */
-  get codaWithGemination(): string {
-    return this.structure(true)[2];
+  get codaNoGemination(): Consonant[] {
+    return this.structure[2].filter((p) => !p.fromGemination);
   }
 
   get word(): Word | null {
