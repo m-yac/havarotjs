@@ -1,7 +1,8 @@
-/* eslint max-classes-per-file: 0, no-shadow: 0 */
+/* eslint max-classes-per-file: 0 */
 import { Char } from "./char";
 import { Syllable } from "./syllable";
 
+/* eslint-disable-next-line no-shadow */
 export enum SyllablePartType {
   consonant = "C",
   vowel = "V",
@@ -81,6 +82,7 @@ export abstract class SyllablePart {
   }
 }
 
+/* eslint-disable-next-line no-shadow */
 export enum ConsonantType {
   onsetConsonant = "OC",
   codaConsonant = "CC",
@@ -110,11 +112,11 @@ export class Consonant extends SyllablePart {
   }
 
   get partOfOnset(): boolean {
-    return this.#consonantType == ConsonantType.onsetConsonant;
+    return this.#consonantType === ConsonantType.onsetConsonant;
   }
 
   get partOfCoda(): boolean {
-    return this.#consonantType != ConsonantType.onsetConsonant;
+    return this.#consonantType !== ConsonantType.onsetConsonant;
   }
 
   /**
@@ -132,7 +134,7 @@ export class Consonant extends SyllablePart {
    * ```
    */
   get fromGemination(): boolean {
-    return this.#consonantType == ConsonantType.codaGeminatedConsonant;
+    return this.#consonantType === ConsonantType.codaGeminatedConsonant;
   }
 }
 

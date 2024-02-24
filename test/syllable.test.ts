@@ -110,25 +110,6 @@ describe("parts/structure cache", () => {
   const parts = syllable.parts;
   const structure = syllable.structure;
 
-  const expected_parts = [
-    new Consonant(heb.chars.slice(0, 1), ConsonantType.onsetConsonant),
-    new Vowel(heb.chars.slice(1, 2)),
-    new Consonant(heb.chars.slice(2, 4), ConsonantType.codaGeminatedConsonant)
-  ];
-  const expected_structure = [[expected_parts[0]], [expected_parts[1]], [expected_parts[2]]];
-
-  test("parts has expected value", () => {
-    expect(parts).toEqual(expected_parts);
-    // NB: They are equal, but are not the same reference
-    expect(parts).not.toBe(expected_parts);
-  });
-
-  test("structure has expected value", () => {
-    expect(structure).toEqual(expected_structure);
-    // NB: They are equal, but are not the same reference
-    expect(structure).not.toBe(expected_structure);
-  });
-
   // If syllable.parts was cached, then any future call to
   // syllable.parts should return the same reference as the first
   test("parts is cached", () => {
@@ -143,9 +124,17 @@ describe("parts/structure cache", () => {
     expect(second_get_of_structure).toBe(structure);
   });
 
-  // Additionally, the references to the indiviual SyllablePart objects
+  // However, since caches are located within syllable objects, a new (but
+  // otheriwse identical) syllable object will not return the same references
+  test("caches are per-syllable", () => {
+    const new_syllable = new Text(str).syllables[0];
+    expect(new_syllable.parts).not.toBe(parts);
+    expect(new_syllable.structure).not.toBe(structure);
+  });
+
+  // Additionally, the references to the individual SyllablePart objects
   // returned by syllable.parts and syllable.structure should be the
-  // same (assuming no taamim)
+  // same (assuming only Consonants and Vowels)
   test("structure and parts caches match", () => {
     const parts_from_structure = structure.flat(1);
     expect(parts_from_structure.length).toEqual(parts.length);
