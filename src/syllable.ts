@@ -361,7 +361,7 @@ export class Syllable extends Node<Syllable> {
         // Consonant, or if there is no such consonant, as a new HebrewMark
         else if (char.sequencePosition === 1 || char.sequencePosition === 2) {
           let success = false;
-          for (let j = parts.length - 1; j >= 0; j++) {
+          for (let j = parts.length - 1; j >= 0; j--) {
             if (parts[j] instanceof Consonant) {
               const cType = seenVowel ? ConsonantType.codaConsonant : ConsonantType.onsetConsonant;
               parts[j] = new Consonant(parts[j].chars.concat([char]), cType);
