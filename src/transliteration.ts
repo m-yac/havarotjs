@@ -3,9 +3,10 @@ import { Text, SylOpts } from "./text";
 import { Word } from "./word";
 import { Syllable } from "./syllable";
 import { SyllablePart, Consonant, Vowel, HebrewMark, NonHebrew } from "./syllablePart";
-import { taamim, vowelsWithSheva } from "./utils/regularExpressions";
+import { punctuation, taamim, vowelsWithSheva } from "./utils/regularExpressions";
 
-const taamimOrMeteg = /[\u0590-\u05AF\u05BD\u05C4\u05C5]/u;
+const taamimOrMeteg = new RegExp(`[${taamim.source.slice(1, -1)}\\u05BD]`, "u");
+const taamimOrPunct = new RegExp(`[${taamimOrMeteg.source.slice(1, -1)}${punctuation.source.slice(1, -1)}]`, "u");
 
 export type DivineNameEntry = {
   clusters: [string, string, string, string];
@@ -14,7 +15,10 @@ export type DivineNameEntry = {
 
 export abstract class TransliterationScheme {
   debug = false;
-  abstract get capitalizationMarker(): string;
+  // U+034F COMBINING GRAPHEME JOINER is invisible, does not get reordered by
+  // normalization, and is otherwise unused - so we use it as our internal marker for
+  // where to capitalize
+  capitalizationMarker: string = "\u034F";
   abstract get syllabificationOptions(): SylOpts;
   abstract get syllableSeparator(): string;
   abstract get gemination(): boolean;
@@ -37,11 +41,11 @@ export abstract class TransliterationScheme {
     // Build the regular expression string
     let sRe = "";
     if (opts.hasPrefix) {
-      sRe += "([בכל]\u05BC?" + vowelsWithSheva.source + "?" + taamimOrMeteg.source + "?)";
+      sRe += "([בהוכלמ]\u05BC?" + vowelsWithSheva.source + "?" + taamimOrMeteg.source + "?)";
     }
-    sRe += "י" + vowelsWithSheva.source + "?(" + taamimOrMeteg.source + ")?";
+    sRe += "י" + (opts.hasPrefix ? "" : vowelsWithSheva.source + "?") + "(" + taamimOrMeteg.source + ")?";
     sRe += "ה" + vowelsWithSheva.source + "?(" + taamimOrMeteg.source + ")?";
-    sRe += (opts.isElohim ? "וִ" : "ָו") + "?(" + taamimOrMeteg.source + ")?";
+    sRe += "ו" + (opts.isElohim ? "ִ" : "ָ?") + "(" + taamimOrMeteg.source + ")?";
     sRe += "ה" + vowelsWithSheva.source + "?(" + taamimOrMeteg.source + ")?";
 
     // Build the replacement string
@@ -51,12 +55,17 @@ export abstract class TransliterationScheme {
         : "adonai" in this.divineName
         ? this.divineName.adonai
         : this.divineName;
-    let sRp = " " + this.capitalizationMarker;
+    let sRp = "";
     let i = 1;
+    // Mark the cluster carrying the vowel to be capitalized with the
+    // capitalization marker - this differs depending on whether or not there
+    // is a prefix
     if (opts.hasPrefix) {
-      sRp += `$${i++}`;
+      sRp += `$${i++}` + this.capitalizationMarker;
+      sRp += entry.withPrefixCluster + `$${i++}`;
+    } else {
+      sRp += entry.clusters[0] + `$${i++}` + this.capitalizationMarker;
     }
-    sRp += (opts.hasPrefix ? entry.withPrefixCluster : entry.clusters[0]) + `$${i++}`;
     sRp += entry.clusters[1] + `$${i++}`;
     sRp += entry.clusters[2] + `$${i++}`;
     sRp += entry.clusters[3] + `$${i++}`;
@@ -68,23 +77,31 @@ export abstract class TransliterationScheme {
     if (typeof x === "string") {
       // Remove extra whitespace
       x = x.replace(new RegExp("  +", "g"), " ");
-      // Handle transliterating the divine name as "adonai" or "elohim"
-      x = this.replaceDivineName(x, { hasPrefix: true, isElohim: true });
-      x = this.replaceDivineName(x, { hasPrefix: true, isElohim: false });
-      x = this.replaceDivineName(x, { hasPrefix: false, isElohim: true });
-      x = this.replaceDivineName(x, { hasPrefix: false, isElohim: false });
       // Do any additional preprocessing
       x = this.preprocess(x);
 
-      // Syllabify and transliterate
-      let trl = this.trl(new Text(x, this.syllabificationOptions));
+      // Syllabify
+      let text = new Text(x, this.syllabificationOptions);
+      let textStr = text.text;
 
-      // Capitalize anything immediately after the capitalization marker
-      if (this.capitalizationMarker.length > 0) {
-        const capEsc = this.capitalizationMarker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const capRe = `${capEsc}([^${this.syllableSeparator}\\s]*)([a-z])`;
-        trl = trl.replace(new RegExp(capRe, "g"), (_: string, m1: string, m2: string) => m1 + m2.toUpperCase());
+      // Handle transliterating the divine name as "adonai" or "elohim"
+      textStr = this.replaceDivineName(textStr, { hasPrefix: true, isElohim: true });
+      textStr = this.replaceDivineName(textStr, { hasPrefix: true, isElohim: false });
+      textStr = this.replaceDivineName(textStr, { hasPrefix: false, isElohim: true });
+      textStr = this.replaceDivineName(textStr, { hasPrefix: false, isElohim: false });
+      // Syllabify again if this actually changed the text
+      if (textStr !== text.text) {
+        text = new Text(textStr, this.syllabificationOptions);
       }
+
+      // Transliterate
+      let trl = this.trl(text);
+
+      // Capitalize the last letter preceding the capitalization marker
+      const capRe = `([a-z])([^a-z\\s${this.syllableSeparator}]*)${this.capitalizationMarker}`;
+      trl = trl.replace(new RegExp(capRe, "g"), (_: string, m1: string, m2: string) => m1.toUpperCase() + m2);
+      // Remove any remaining capitalization markers
+      trl = trl.replaceAll(this.capitalizationMarker, "");
       // Do any additional postprocessing
       trl = this.postprocess(trl);
 
@@ -140,7 +157,7 @@ export abstract class TransliterationScheme {
     }
     if (x instanceof HebrewMark) {
       this.log("- + mark:", "א" + x.text);
-      return taamim.test(x.text) || x.text === "\u05BD" ? x.text : "";
+      return taamimOrPunct.test(x.text) ? x.text : "";
       // throw new Error("Implement trl(HebrewMark)");
     }
     if (x instanceof NonHebrew) {
@@ -152,7 +169,6 @@ export abstract class TransliterationScheme {
 }
 
 export class DefaultTransliterationScheme extends TransliterationScheme {
-  #capitalizationMarker: string = "^";
   #syllabificationOptions: SylOpts = {
     allowNoNiqqud: true,
     article: true,
@@ -245,10 +261,6 @@ export class DefaultTransliterationScheme extends TransliterationScheme {
     // Add a space after a maqaf
     trl = trl.replaceAll("־", "־ ");
     return trl;
-  }
-
-  get capitalizationMarker(): string {
-    return this.#capitalizationMarker;
   }
 
   get syllabificationOptions(): SylOpts {
