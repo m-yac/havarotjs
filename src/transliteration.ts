@@ -1,3 +1,4 @@
+/* eslint-disable max-classes-per-file */
 import { Text, SylOpts } from "./text";
 import { Word } from "./word";
 import { Syllable } from "./syllable";
@@ -6,11 +7,12 @@ import { taamim, vowelsWithSheva } from "./utils/regularExpressions";
 
 const taamimOrMeteg = /[\u0590-\u05AF\u05BD\u05C4\u05C5]/u;
 
-type DivineNameEntry = { clusters: [string, string, string, string],
-                         withPrefixCluster: string };
+export type DivineNameEntry = {
+  clusters: [string, string, string, string];
+  withPrefixCluster: string;
+};
 
-
-abstract class TransliterationScheme {
+export abstract class TransliterationScheme {
   debug = false;
   abstract get capitalizationMarker(): string;
   abstract get syllabificationOptions(): SylOpts;
@@ -18,40 +20,46 @@ abstract class TransliterationScheme {
   abstract get gemination(): boolean;
   abstract get consonants(): { [fromStart: string]: string };
   abstract get vowels(): { [fromStart: string]: string };
-  abstract get divineName(): DivineNameEntry | { adonai: DivineNameEntry,
-                                                 elohim: DivineNameEntry };
+  abstract get divineName(): DivineNameEntry | { adonai: DivineNameEntry; elohim: DivineNameEntry };
   abstract consonantExceptions(c: Consonant): string | undefined;
   abstract vowelExceptions(c: Vowel, txt: string): string | undefined;
   abstract preprocess(he: string): string;
   abstract postprocess(trl: string): string;
 
-  replaceDivineName(s: string, opts: { readonly hasPrefix: boolean,
-                                       readonly isElohim: boolean }): string {
+  private log(...args: unknown[]): void {
+    if (this.debug) {
+      // eslint-disable-next-line no-console
+      console.log(...args);
+    }
+  }
+
+  replaceDivineName(s: string, opts: { readonly hasPrefix: boolean; readonly isElohim: boolean }): string {
     // Build the regular expression string
-    let sRe = ""
+    let sRe = "";
     if (opts.hasPrefix) {
       sRe += "([בכל]\u05BC?" + vowelsWithSheva.source + "?" + taamimOrMeteg.source + "?)";
     }
     sRe += "י" + vowelsWithSheva.source + "?(" + taamimOrMeteg.source + ")?";
     sRe += "ה" + vowelsWithSheva.source + "?(" + taamimOrMeteg.source + ")?";
-    sRe += (opts.isElohim ? "וִ" : "ָו")  + "?(" + taamimOrMeteg.source + ")?";
+    sRe += (opts.isElohim ? "וִ" : "ָו") + "?(" + taamimOrMeteg.source + ")?";
     sRe += "ה" + vowelsWithSheva.source + "?(" + taamimOrMeteg.source + ")?";
 
     // Build the replacement string
-    const entry = opts.isElohim &&
-                  "elohim" in this.divineName ? this.divineName.elohim :
-                  "adonai" in this.divineName ? this.divineName.adonai
-                                               : this.divineName;
+    const entry =
+      opts.isElohim && "elohim" in this.divineName
+        ? this.divineName.elohim
+        : "adonai" in this.divineName
+        ? this.divineName.adonai
+        : this.divineName;
     let sRp = " " + this.capitalizationMarker;
     let i = 1;
     if (opts.hasPrefix) {
       sRp += `$${i++}`;
     }
-    sRp += (opts.hasPrefix ? entry.withPrefixCluster :
-             entry.clusters[0]) + `$${i++}`;
-    sRp +=  entry.clusters[1]  + `$${i++}`;
-    sRp +=  entry.clusters[2]  + `$${i++}`;
-    sRp +=  entry.clusters[3]  + `$${i++}`;
+    sRp += (opts.hasPrefix ? entry.withPrefixCluster : entry.clusters[0]) + `$${i++}`;
+    sRp += entry.clusters[1] + `$${i++}`;
+    sRp += entry.clusters[2] + `$${i++}`;
+    sRp += entry.clusters[3] + `$${i++}`;
 
     return s.replace(new RegExp(sRe, "gu"), sRp);
   }
@@ -61,10 +69,10 @@ abstract class TransliterationScheme {
       // Remove extra whitespace
       x = x.replace(new RegExp("  +", "g"), " ");
       // Handle transliterating the divine name as "adonai" or "elohim"
-      x = this.replaceDivineName(x, {hasPrefix: true,  isElohim: true });
-      x = this.replaceDivineName(x, {hasPrefix: true,  isElohim: false});
-      x = this.replaceDivineName(x, {hasPrefix: false, isElohim: true });
-      x = this.replaceDivineName(x, {hasPrefix: false, isElohim: false});
+      x = this.replaceDivineName(x, { hasPrefix: true, isElohim: true });
+      x = this.replaceDivineName(x, { hasPrefix: true, isElohim: false });
+      x = this.replaceDivineName(x, { hasPrefix: false, isElohim: true });
+      x = this.replaceDivineName(x, { hasPrefix: false, isElohim: false });
       // Do any additional preprocessing
       x = this.preprocess(x);
 
@@ -73,9 +81,9 @@ abstract class TransliterationScheme {
 
       // Capitalize anything immediately after the capitalization marker
       if (this.capitalizationMarker.length > 0) {
-        const capEsc = this.capitalizationMarker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const capEsc = this.capitalizationMarker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const capRe = `${capEsc}([^${this.syllableSeparator}\\s]*)([a-z])`;
-        trl = trl.replace(new RegExp(capRe, "g"), (_, m1, m2) => m1 + m2.toUpperCase())
+        trl = trl.replace(new RegExp(capRe, "g"), (_: string, m1: string, m2: string) => m1 + m2.toUpperCase());
       }
       // Do any additional postprocessing
       trl = this.postprocess(trl);
@@ -83,18 +91,18 @@ abstract class TransliterationScheme {
       return trl;
     }
     if (x instanceof Text) {
-      return x.words.reduce((s, wd) => s + this.trl(wd) + wd.whiteSpaceAfter, "");
+      return x.words.reduce((s, wd) => s + this.trl(wd) + (wd.whiteSpaceAfter ?? ""), "");
     }
     if (x instanceof Word) {
-      if (this.debug) console.log("Word:", x.text);
+      this.log("Word:", x.text);
       return x.syllables.map((s) => this.trl(s)).join(this.syllableSeparator);
     }
     if (x instanceof Syllable) {
-      if (this.debug) console.log("- syllable:", x.text);
+      this.log("- syllable:", x.text);
       return x.parts.map((p) => this.trl(p)).join("");
     }
     if (x instanceof Consonant) {
-      if (this.debug) console.log("- + consonant:", x.text);
+      this.log("- + consonant:", x.text);
       if (x.fromGemination && !this.gemination) {
         return "";
       }
@@ -113,16 +121,16 @@ abstract class TransliterationScheme {
     }
     if (x instanceof Vowel) {
       const txt = "א" + x.text;
-      if (this.debug) console.log("- + vowel:", txt);
+      this.log("- + vowel:", txt);
       const exn = this.vowelExceptions(x, txt);
       if (exn !== undefined) {
         return exn;
       }
       const txtNoHolemHaserVav = txt.replaceAll("\u05BA", "\u05B9");
-      const txts = [txt] + txt == txtNoHolemHaserVav ? [] : [txtNoHolemHaserVav];
-      for (let i = 0; i < txts.length; i++) {
-        for (let n = txts[i].length; n > 1; n--) {
-          const s = this.vowels[txts[i].slice(0, n)];
+      const txts = txt === txtNoHolemHaserVav ? [txt] : [txt, txtNoHolemHaserVav];
+      for (const t of txts) {
+        for (let n = t.length; n > 1; n--) {
+          const s = this.vowels[t.slice(0, n)];
           if (s !== undefined) {
             return s;
           }
@@ -131,19 +139,19 @@ abstract class TransliterationScheme {
       throw new Error(`Unhandled vowel: ${x.text}`);
     }
     if (x instanceof HebrewMark) {
-      if (this.debug) console.log("- + mark:", "א" + x.text);
-      return taamim.test(x.text) || x.text == "\u05BD" ? x.text : "";
+      this.log("- + mark:", "א" + x.text);
+      return taamim.test(x.text) || x.text === "\u05BD" ? x.text : "";
       // throw new Error("Implement trl(HebrewMark)");
     }
     if (x instanceof NonHebrew) {
       return x.text;
       // throw new Error("Implement trl(NonHebrew)");
     }
-    throw new Error(`Unable to handle: ${x}`);
+    throw new Error(`Unable to handle: ${JSON.stringify(x)}`);
   }
 }
 
-class DefaultTransliterationScheme extends TransliterationScheme {
+export class DefaultTransliterationScheme extends TransliterationScheme {
   #capitalizationMarker: string = "^";
   #syllabificationOptions: SylOpts = {
     allowNoNiqqud: true,
@@ -155,6 +163,7 @@ class DefaultTransliterationScheme extends TransliterationScheme {
   };
   #syllableSeparator = "·";
   #gemination = false;
+  /* eslint-disable sort-keys */
   // prettier-ignore
   #consonants: { [fromStart: string]: string } = {
     א: "",
@@ -189,16 +198,17 @@ class DefaultTransliterationScheme extends TransliterationScheme {
     אֳ: "o", אׇ: "o", אֹ: "o", אֹו: "o",
     אֻ: "u", אוּ: "u"
   };
-  #divineName: { adonai: DivineNameEntry, elohim: DivineNameEntry } = {
+  /* eslint-enable sort-keys */
+  #divineName: { adonai: DivineNameEntry; elohim: DivineNameEntry } = {
     adonai: {
-      withPrefixCluster: "א",
-      clusters: ["אֲ", "דֹ", "נָ", "י"]
+      clusters: ["אֲ", "דֹ", "נָ", "י"],
+      withPrefixCluster: "א"
     },
     elohim: {
-      withPrefixCluster: "א",
-      clusters: ["אֱ", "לֹ", "הִ", "ים"]
-    },
-  }
+      clusters: ["אֱ", "לֹ", "הִ", "ים"],
+      withPrefixCluster: "א"
+    }
+  };
 
   consonantExceptions(c: Consonant): string | undefined {
     if (c.text === "י" && c.partOfCoda && c.syllable) {
@@ -231,7 +241,7 @@ class DefaultTransliterationScheme extends TransliterationScheme {
 
   postprocess(trl: string): string {
     // Capitalize the first letter of any verse
-    trl = trl.replace(new RegExp("(׃ )([a-z])", "g"), (_, m1, m2) => m1 + m2.toUpperCase())
+    trl = trl.replace(new RegExp("(׃ )([a-z])", "g"), (_: string, m1: string, m2: string) => m1 + m2.toUpperCase());
     // Add a space after a maqaf
     trl = trl.replaceAll("־", "־ ");
     return trl;
@@ -261,25 +271,7 @@ class DefaultTransliterationScheme extends TransliterationScheme {
     return this.#vowels;
   }
 
-  get divineName(): { adonai: DivineNameEntry, elohim: DivineNameEntry } {
+  get divineName(): { adonai: DivineNameEntry; elohim: DivineNameEntry } {
     return this.#divineName;
-  }
-}
-
-// If this file is run as a script, transliterate the given input
-if (process !== undefined && process.argv !== undefined && process.argv[1].endsWith("transliteration.ts")) {
-  const input = process.argv[2];
-  const ts = new DefaultTransliterationScheme();
-  try {
-    const pageData = JSON.parse(input) as string[][][];
-    console.log(JSON.stringify(pageData.map(function (lineData, i) {
-      return lineData.map(function (textData, j) {
-        return textData.map(function (text, k) {
-          return ts.trl(text);
-        })
-      })
-    })));
-  } catch (_) {
-    console.log(JSON.stringify(ts.trl(input)));
   }
 }
