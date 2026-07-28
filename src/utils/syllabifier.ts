@@ -7,7 +7,7 @@ type Syl = Cluster[];
 type Mixed = (Syllable | Cluster)[];
 
 /**
- * @description creates a new Syllable, pushes to results[], and resets syl[]
+ * Creates a new syllable from the `syl`, pushes it to `results` and returns an empty array
  */
 const createNewSyllable = (result: Mixed, syl: Syl, isClosed?: boolean): Syl => {
   isClosed = isClosed || false;
@@ -17,17 +17,18 @@ const createNewSyllable = (result: Mixed, syl: Syl, isClosed?: boolean): Syl => 
 };
 
 /**
- * @description determines the Cluster[] that will become the final Syllable
+ * Group clusters for the final syllable
  *
- * @param arr an array of Clusters to be grouped
- * @param strict where to implement strict mode
- * @param vowelsRgx a regex for the set of Hebrew vowels excluding sheva
+ * @remarks
+ *
+ * Grouping the final first helps to avoid issues with final kafs/tavs
  */
-const groupFinal = (arr: Cluster[], vowelsRgx: RegExp = vowels): Mixed => {
-  // grouping the final first helps to avoid issues with final kafs/tavs
+const groupFinal = (arr: Cluster[]): Mixed => {
   const len = arr.length;
   let i = 0;
+  /** temporary array to collect clusters for the current syllable */
   const syl: Syl = [];
+  /** collects the end result */
   let result: Mixed = [];
   let vowelPresent = false;
 
@@ -81,7 +82,7 @@ const groupFinal = (arr: Cluster[], vowelsRgx: RegExp = vowels): Mixed => {
   }
 
   const finalChar = finalCluster.chars.filter((c) => c.sequencePosition !== 4).at(-1)?.text || "";
-  const hasFinalVowel = vowelsRgx.test(finalChar);
+  const hasFinalVowel = vowels.test(finalChar);
   const isClosed =
     !finalCluster.isShureq &&
     !finalCluster.isMater &&
@@ -101,13 +102,17 @@ const groupFinal = (arr: Cluster[], vowelsRgx: RegExp = vowels): Mixed => {
 };
 
 /**
- * @description groups shevas either by themselves or with preceding short vowel
+ * @remarks groups shevas either by themselves or with preceding short vowel
  */
 const groupShevas = (arr: Mixed, options: SylOpts): Mixed => {
-  let shevaPresent = false;
-  let syl: Syl = [];
-  const result: Mixed = [];
   const len = arr.length;
+  /** temporary array to collect clusters for the current syllable */
+  let syl: Syl = [];
+  /** collects the end result */
+  const result: Mixed = [];
+  /** flag indicating if a sheva is present in the `syl` */
+  let shevaPresent = false;
+  /** creates a new syllable from the `syl`, pushes it to `results` and returns an empty array */
   const shevaNewSyllable = createNewSyllable.bind(groupShevas, result);
 
   for (let index = 0; index < len; index++) {
@@ -121,6 +126,15 @@ const groupShevas = (arr: Mixed, options: SylOpts): Mixed => {
 
     const clusterHasSheva = cluster.hasSheva;
 
+    // if a sheva is already present and the current cluster has a sheva
+    // then there are two shevas in a row, meaning the first cluster is it's own syllable
+    if (shevaPresent && clusterHasSheva) {
+      syl = shevaNewSyllable(syl);
+      syl.unshift(cluster);
+      continue;
+    }
+
+    // in here, add a check for in the prev cluster (i.e. syl) or use shevaPresent
     if (clusterHasSheva && cluster.hasMeteg && options.shevaWithMeteg) {
       syl.unshift(cluster);
       syl = shevaNewSyllable(syl);
@@ -143,13 +157,9 @@ const groupShevas = (arr: Mixed, options: SylOpts): Mixed => {
       continue;
     }
 
-    if (shevaPresent && clusterHasSheva) {
-      syl = shevaNewSyllable(syl);
-      syl.unshift(cluster);
-      continue;
-    }
-
-    if (shevaPresent && cluster.hasShortVowel) {
+    // the occurrence of a half-vowel is a non-standard spelling
+    // but it does occur in some texts
+    if (shevaPresent && (cluster.hasShortVowel || cluster.hasHalfVowel)) {
       if (options.shevaAfterMeteg && cluster.hasMeteg) {
         syl = shevaNewSyllable(syl);
         syl.unshift(cluster);
@@ -235,12 +245,15 @@ const groupShevas = (arr: Mixed, options: SylOpts): Mixed => {
 };
 
 /**
- * @description groups non-final maters with preceding cluster
+ * @remarks groups non-final maters with preceding cluster
  */
 const groupMaters = (arr: Mixed, strict: boolean = true): Mixed => {
   const len = arr.length;
+  /** temporary array to collect clusters for the current syllable */
   let syl: Syl = [];
+  /** collects the end result */
   const result: Mixed = [];
+  /** creates a new syllable from the `syl`, pushes it to `results` and returns an empty array */
   const materNewSyllable = createNewSyllable.bind(groupMaters, result);
 
   for (let index = 0; index < len; index++) {
@@ -303,12 +316,15 @@ const groupMaters = (arr: Mixed, strict: boolean = true): Mixed => {
 };
 
 /**
- * @description groups non-final shureqs with preceding cluster
+ * @remarks groups non-final shureqs with preceding cluster
  */
 const groupShureqs = (arr: Mixed, strict: boolean = true): Mixed => {
   const len = arr.length;
+  /** temporary array to collect clusters for the current syllable */
   let syl: Syl = [];
+  /** collects the end result */
   const result: Mixed = [];
+  /** creates a new syllable from the `syl`, pushes it to `results` and returns an empty array */
   const shureqNewSyllable = createNewSyllable.bind(groupShureqs, result);
 
   for (let index = 0; index < len; index++) {
@@ -343,7 +359,7 @@ const groupShureqs = (arr: Mixed, strict: boolean = true): Mixed => {
 };
 
 /**
- * @description a preprocessing step that groups clusters into intermediate syllables by vowels or shevas
+ * @remarks a preprocessing step that groups clusters into intermediate syllables by vowels or shevas
  */
 const groupClusters = (arr: Cluster[], options: SylOpts): Mixed => {
   const rev = arr.reverse();
@@ -402,7 +418,7 @@ const setIsAccented = (syllable: Syllable) => {
   const segolta = /\u{0592}/u;
   if (segolta.test(syllable.text)) {
     // see לָֽאָדָם֒ as an example of segolta on the final syllable
-    if (syllable.isFinal && prev) {
+    if (!syllable.next && prev) {
       // see יֹאשִׁיָּ֒הוּ֒ as an example of segolta on a previous syllable
       while (prev) {
         if (segolta.test(prev.text)) {
@@ -423,12 +439,11 @@ const setIsAccented = (syllable: Syllable) => {
   const zarqa = /\u{05AE}/u;
   // a zarqa's "helper" in MAPM
   // see more https://forums.accordancebible.com/topic/31576-zinor-and-zarqa-accents/#comment-156318
-  const zarqaHelper = /\u{0598}/u;
-
   if (zarqa.test(syllable.text)) {
+    const zarqaHelper = /\u{0598}/u;
     // see לָֽאָדָם֒ as an example of zarqa on the final syllable
     // a zarqa should always be on the final syllable
-    if (syllable.isFinal && prev) {
+    if (!syllable.next && prev) {
       // see וַיֹּ֘אמֶר֮ as an example of zarqa helper on a previous syllable
       while (prev) {
         if (zarqaHelper.test(prev.text)) {
@@ -440,11 +455,20 @@ const setIsAccented = (syllable: Syllable) => {
     }
   }
 
+  // prepositive
+  // the sinnorit is incorrectly named in the Unicode spec as ZARQA (U+0598)
+  // the same character is also used as the zarqaHelper above
+  const sinnorit = /\u{0598}/u;
+  if (sinnorit.test(syllable.text)) {
+    syllable.isAccented = false;
+    return;
+  }
+
   // postpositive
   // check if any preceding syllable has a pashta or qadma character
   const pashta = /\u{0599}/u;
   const sylText = syllable.text;
-  if (syllable.isFinal && pashta.test(sylText)) {
+  if (!syllable.next && pashta.test(sylText)) {
     const qadma = /\u{05A8}/u;
     while (prev) {
       if (pashta.test(prev.text) || qadma.test(prev.text)) {
@@ -486,6 +510,49 @@ const setIsAccented = (syllable: Syllable) => {
     return;
   }
 
+  // ole-weyored, the ole does not take the accent, only the "yored" (i.e. a merkha)
+  // unless the ole is by itself
+  const ole = /\u{05AB}/u;
+  if (ole.test(syllable.text)) {
+    const yored = /\u{05A5}/u;
+    let next = syllable.next?.value;
+
+    while (next) {
+      if (yored.test(next.text)) {
+        next.isAccented = true;
+        syllable.isAccented = false;
+        return;
+      }
+      next = (next?.next?.value as Syllable) ?? null;
+    }
+
+    syllable.isAccented = true;
+    return;
+  }
+
+  // dechi, the dechi does not take the accent
+  // so always assume the final syallble is accented
+  const dechi = /\u{05AD}/u;
+  if (dechi.test(syllable.text)) {
+    let next = syllable.next?.value;
+
+    while (next) {
+      // if the last syllable, set as accented
+      if (!next?.next) {
+        next.isAccented = true;
+        return;
+      }
+      next = (next?.next?.value as Syllable) ?? null;
+    }
+  }
+
+  // the geresh muqdam always appears before a rebia, which receives the stress
+  const gereshMuqdam = /\u{059D}/u;
+  if (gereshMuqdam.test(syllable.text)) {
+    syllable.isAccented = false;
+    return;
+  }
+
   const isAccented = syllable.clusters.filter((cluster) => (cluster.hasTaamim || cluster.hasSilluq ? true : false))
     .length
     ? true
@@ -495,7 +562,7 @@ const setIsAccented = (syllable: Syllable) => {
 
 /**
  *
- * @description a step to get a Cluster's original position before filtering out latin
+ * @remarks a step to get a Cluster's original position before filtering out latin
  */
 const clusterPos = (cluster: Cluster, i: number): { cluster: Cluster; pos: number } => {
   return { cluster, pos: i };
@@ -516,8 +583,7 @@ const reinsertLatin = (syls: Syllable[], latin: { cluster: Cluster; pos: number 
       const firstSyl = syls[0];
       syls[0] = new Syllable([...partial, ...firstSyl.clusters], {
         isAccented: firstSyl.isAccented,
-        isClosed: firstSyl.isClosed,
-        isFinal: firstSyl.isFinal
+        isClosed: firstSyl.isClosed
       });
     } else {
       const lastSyl = syls[numOfSyls - 1];
@@ -527,8 +593,7 @@ const reinsertLatin = (syls: Syllable[], latin: { cluster: Cluster; pos: number 
       }
       syls[numOfSyls - 1] = new Syllable([...lastSyl.clusters, ...partial], {
         isAccented: lastSyl.isAccented,
-        isClosed: lastSyl.isClosed,
-        isFinal: lastSyl.isFinal
+        isClosed: lastSyl.isClosed
       });
     }
   }
@@ -546,7 +611,6 @@ export const syllabify = (clusters: Cluster[], options: SylOpts, isWordInConstru
   first.siblings = rest;
 
   // set syllable properties
-  syllables[syllables.length - 1].isFinal = true;
   syllables.forEach(setIsClosed);
   syllables.forEach(setIsAccented);
 
@@ -557,6 +621,6 @@ export const syllabify = (clusters: Cluster[], options: SylOpts, isWordInConstru
   }
 
   // for each cluster, set its syllable
-  syllables.forEach((s) => s.clusters.forEach((c) => (c.syllable = s)));
+  syllables.forEach((s) => s.clusters.forEach((c) => (c.parent = s)));
   return latinClusters.length ? reinsertLatin(syllables, latinClusters) : syllables;
 };

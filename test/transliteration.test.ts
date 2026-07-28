@@ -1,3 +1,4 @@
+import { describe, expect, test } from "vitest";
 import { DefaultTransliterationScheme } from "../src/transliteration";
 
 const scheme = new DefaultTransliterationScheme();

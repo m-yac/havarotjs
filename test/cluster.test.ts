@@ -1,5 +1,53 @@
-import { Text } from "../src/index";
+import { describe, expect, test } from "vitest";
 import { Cluster } from "../src/cluster";
+import { Text } from "../src/index";
+
+describe.each`
+  description       | hebrew              | clusterNum | consonant
+  ${"consonant"}    | ${"הָאָ֖רֶץ"}       | ${0}       | ${["ה"]}
+  ${"no consonant"} | ${"וַֽיְהִי־כֵֽן׃"} | ${4}       | ${[]}
+`("consonants:", ({ description, hebrew, clusterNum, consonant }) => {
+  describe(description, () => {
+    test(`consonant to equal ${consonant}`, () => {
+      const text = new Text(hebrew);
+      expect(text.clusters[clusterNum].consonants).toEqual(consonant);
+    });
+  });
+});
+
+describe.each`
+  description       | hebrew              | clusterNum | name
+  ${"consonant"}    | ${"הָאָ֖רֶץ"}       | ${0}       | ${["HE"]}
+  ${"no consonant"} | ${"וַֽיְהִי־כֵֽן׃"} | ${4}       | ${[]}
+`("consonantNames:", ({ description, hebrew, clusterNum, name }) => {
+  describe(description, () => {
+    test(`consonantNames to equal ${name}`, () => {
+      const text = new Text(hebrew);
+      expect(text.clusters[clusterNum].consonantNames).toEqual(name);
+    });
+  });
+});
+
+describe.each`
+  description            | hebrew        | clusterNum | consonantName | hasConsonantName
+  ${"with consonant"}    | ${"הָאָ֖רֶץ"} | ${0}       | ${"HE"}       | ${true}
+  ${"without consonant"} | ${"הָאָ֖רֶץ"} | ${0}       | ${"ALEF"}     | ${false}
+`("hasConsonantName:", ({ description, hebrew, clusterNum, consonantName, hasConsonantName }) => {
+  describe(description, () => {
+    test(`hasConsonantName to equal ${hasConsonantName}`, () => {
+      const text = new Text(hebrew);
+      expect(text.clusters[clusterNum].hasConsonantName(consonantName)).toEqual(hasConsonantName);
+    });
+  });
+});
+
+describe("hasConsonantName (error)", () => {
+  test("throws error", () => {
+    const text = new Text("הָאָ֖רֶץ");
+    // @ts-expect-error: testing an invalid parameter
+    expect(() => text.clusters[0].hasConsonantName("BOB")).toThrow();
+  });
+});
 
 describe.each`
   description                                        | hebrew              | clusterNum | hasMeteg
@@ -40,6 +88,31 @@ describe.each`
 });
 
 describe.each`
+  description                  | hebrew              | clusterNum | taamName    | result
+  ${"has character"}           | ${"הָאָ֖רֶץ"}       | ${1}       | ${"TIPEHA"} | ${true}
+  ${"no character"}            | ${"וַֽיְהִי־כֵֽן׃"} | ${1}       | ${"TIPEHA"} | ${false}
+  ${"has wrong character"}     | ${"הָאָ֖רֶץ"}       | ${1}       | ${"ZINOR"}  | ${false}
+  ${"has multiple characters"} | ${"מִתָּ֑͏ַ֜חַת"}    | ${1}       | ${"GERESH"} | ${true}
+`("hasTaamName:", ({ description, hebrew, clusterNum, taamName, result }) => {
+  const heb = new Text(hebrew);
+  const cluster = heb.clusters[clusterNum];
+  const clusterHasVowelName = cluster.hasTaamName(taamName);
+  describe(description, () => {
+    test(`Should cluster have ${taamName}? ${result}`, () => {
+      expect(clusterHasVowelName).toEqual(result);
+    });
+  });
+});
+
+describe("hasTaamName (error)", () => {
+  test("throws error", () => {
+    const text = new Text("הָאָ֖רֶץ");
+    // @ts-expect-error: testing an invalid parameter
+    expect(() => text.clusters[0].hasTaamName("BOB")).toThrow();
+  });
+});
+
+describe.each`
   description                | hebrew              | clusterNum | vowelName   | result
   ${"cluster with patah"}    | ${"הַֽ֭יְחָבְרְךָ"} | ${0}       | ${"PATAH"}  | ${true}
   ${"cluster with qamets"}   | ${"הַֽ֭יְחָבְרְךָ"} | ${0}       | ${"QAMATS"} | ${false}
@@ -52,6 +125,14 @@ describe.each`
     test(`Should cluster have ${vowelName}? ${result}`, () => {
       expect(clusterHasVowelName).toEqual(result);
     });
+  });
+});
+
+describe("hasVowelName (error)", () => {
+  test("throws error", () => {
+    const text = new Text("הָאָ֖רֶץ");
+    // @ts-expect-error: testing an invalid parameter
+    expect(() => text.clusters[0].hasVowelName("BOB")).toThrow();
   });
 });
 
@@ -75,7 +156,6 @@ describe.each`
   ${"qamets-he, one syllable"}                                    | ${"בָּה"}          | ${["בָּה"]}                          | ${[false, true]}
   ${"qamets-he, two syllables"}                                   | ${"יָפָה"}         | ${["יָ", "פָה"]}                     | ${[false, false, true]}
   ${"qamets-he follwed by shureq (not mater)"}                    | ${"אֵלִיָּ֨הוּ"}   | ${["אֵ", "לִ", "יָּ֨", "הוּ"]}       | ${[false, false, false, false, false]}
-  ${"segol-he, two syllables"}                                    | ${"יָפֶה"}         | ${["יָ", "פֶה"]}                     | ${[false, false, true]}
   ${"3fs suffix, one syllable"}                                   | ${"בָּהּ"}         | ${["בָּהּ"]}                         | ${[false, false]}
   ${"3ms plural suffix, three syllable"}                          | ${"תֹּורֹתָיו"}    | ${["תֹּו", "רֹ", "תָיו"]}            | ${[false, true, false, false, false, false]}
   ${"quiesced aleph, two syllables"}                              | ${"רִאשׁ֔וֹן"}     | ${["רִא", "שֹׁ֔ון"]}                 | ${[false, false, false, true, false]}
@@ -129,7 +209,7 @@ describe.each`
 });
 
 describe.each`
-  description    | hebrew         | clusterNum | isTaam
+  description    | hebrew         | clusterNum | istaamim
   ${"meteg"}     | ${"הָאָֽרֶץ׃"} | ${1}       | ${false}
   ${"sof pasuq"} | ${"הָאָֽרֶץ׃"} | ${3}       | ${true}
 `("isTaam:", ({ description, hebrew, clusterNum, isTaam }) => {
@@ -164,34 +244,59 @@ describe("syllable:", () => {
 });
 
 describe.each`
-  description                | hebrew              | clusterNum | vowel
-  ${"cluster with patah"}    | ${"הַֽ֭יְחָבְרְךָ"} | ${0}       | ${"\u{05B7}"}
-  ${"cluster with sheva"}    | ${"הַֽ֭יְחָבְרְךָ"} | ${3}       | ${null}
-  ${"cluster with no vowel"} | ${"י֔וֹם"}          | ${2}       | ${null}
-`("vowel:", ({ description, hebrew, clusterNum, vowel }) => {
-  const heb = new Text(hebrew);
-  const cluster = heb.clusters[clusterNum];
-  const clusterVowel = cluster.vowel;
+  description              | hebrew              | clusterNum | taamim
+  ${"one character"}       | ${"הָאָ֖רֶץ"}       | ${1}       | ${["\u{596}"]}
+  ${"no characters"}       | ${"וַֽיְהִי־כֵֽן׃"} | ${1}       | ${[]}
+  ${"multiple characters"} | ${"מִתָּ֑͏ַ֜חַת"}    | ${1}       | ${["\u{591}", "\u{59C}"]}
+`("taamim:", ({ description, hebrew, clusterNum, taamim }) => {
   describe(description, () => {
-    test(`vowel to equal ${vowel}`, () => {
-      expect(clusterVowel).toEqual(vowel);
+    test(`taam to equal ${taamim}`, () => {
+      const text = new Text(hebrew);
+      expect(text.clusters[clusterNum].taamim).toEqual(taamim);
     });
   });
 });
 
 describe.each`
-  description                | hebrew              | clusterNum | vowelName
-  ${"cluster with patah"}    | ${"הַֽ֭יְחָבְרְךָ"} | ${0}       | ${"PATAH"}
-  ${"cluster with qamets"}   | ${"הַֽ֭יְחָבְרְךָ"} | ${2}       | ${"QAMATS"}
-  ${"cluster with sheva"}    | ${"הַֽ֭יְחָבְרְךָ"} | ${3}       | ${null}
-  ${"cluster with no vowel"} | ${"י֔וֹם"}          | ${2}       | ${null}
-`("vowelName:", ({ description, hebrew, clusterNum, vowelName }) => {
-  const heb = new Text(hebrew);
-  const cluster = heb.clusters[clusterNum];
-  const clusterVowelName = cluster.vowelName;
+  description              | hebrew              | clusterNum | taamimNames
+  ${"one character"}       | ${"הָאָ֖רֶץ"}       | ${1}       | ${["TIPEHA"]}
+  ${"no characters"}       | ${"וַֽיְהִי־כֵֽן׃"} | ${1}       | ${[]}
+  ${"multiple characters"} | ${"מִתָּ֑͏ַ֜חַת"}    | ${1}       | ${["ETNAHTA", "GERESH"]}
+`("taamimNames:", ({ description, hebrew, clusterNum, taamimNames }) => {
   describe(description, () => {
-    test(`vowel name to equal ${vowelName}`, () => {
-      expect(clusterVowelName).toEqual(vowelName);
+    test(`taamimNames to equal ${taamimNames}`, () => {
+      const text = new Text(hebrew);
+      expect(text.clusters[clusterNum].taamimNames).toEqual(taamimNames);
+    });
+  });
+});
+
+describe.each`
+  description             | hebrew              | clusterNum | vowelNames
+  ${"with one character"} | ${"הָאָ֖רֶץ"}       | ${1}       | ${["QAMATS"]}
+  ${"with sheva"}         | ${"וַֽיְהִי־כֵֽן׃"} | ${1}       | ${[]}
+  ${"with maqqaf"}        | ${"וַֽיְהִי־כֵֽן׃"} | ${4}       | ${[]}
+  ${"multiple vowels"}    | ${"מִתָּ֑͏ַ֜חַת"}    | ${1}       | ${["QAMATS", "PATAH"]}
+`("vowelNames:", ({ description, hebrew, clusterNum, vowelNames }) => {
+  describe(description, () => {
+    test(`vowel names to equal ${vowelNames}`, () => {
+      const text = new Text(hebrew);
+      expect(text.clusters[clusterNum].vowelNames).toEqual(vowelNames);
+    });
+  });
+});
+
+describe.each`
+  description             | hebrew              | clusterNum | vowels
+  ${"cluster with patah"} | ${"הַֽ֭יְחָבְרְךָ"} | ${0}       | ${["\u{05B7}"]}
+  ${"cluster with sheva"} | ${"הַֽ֭יְחָבְרְךָ"} | ${1}       | ${[]}
+  ${"with maqqaf"}        | ${"וַֽיְהִי־כֵֽן׃"} | ${4}       | ${[]}
+  ${"multiple vowels"}    | ${"מִתָּ֑͏ַ֜חַת"}    | ${1}       | ${["\u{5B8}", "\u{5B7}"]}
+`("vowels:", ({ description, hebrew, clusterNum, vowels }) => {
+  describe(description, () => {
+    test(`vowels to equal ${vowels}`, () => {
+      const text = new Text(hebrew);
+      expect(text.clusters[clusterNum].vowels).toEqual(vowels);
     });
   });
 });

@@ -1,6 +1,6 @@
-import { removeTaamim } from "./removeTaamim";
 import { SylOpts } from "../text";
 import { taamim } from "./regularExpressions";
+import { removeTaamim } from "./removeTaamim";
 
 const findMatches = (word: string, regx: RegExp, cb: (w: string, s: number, e: number) => string) => {
   regx.lastIndex = 0;
@@ -11,7 +11,7 @@ const findMatches = (word: string, regx: RegExp, cb: (w: string, s: number, e: n
   }
 
   for (const match of matches) {
-    const start = charPos[match.index!]; // eslint-disable-line
+    const start = charPos[match.index!];
     const end = charPos[match[0].length] + start;
     word = cb(word, start, end);
   }
@@ -43,7 +43,7 @@ export const holemWaw = (word: string, options: SylOpts): string => {
   }
 
   word = vavHolemMale.test(word)
-    ? findMatches(word, vavHolemMale, (w, s, e) => {
+    ? findMatches(word, vavHolemMale, () => {
         return word.replaceAll(vavHolemMale, "\u{05B9}\u{05D5}");
       })
     : word;

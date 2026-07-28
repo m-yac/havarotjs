@@ -2,7 +2,6 @@
 import { Char } from "./char";
 import { Syllable } from "./syllable";
 
-/* eslint-disable-next-line no-shadow */
 export enum SyllablePartType {
   consonant = "C",
   vowel = "V",
@@ -82,7 +81,6 @@ export abstract class SyllablePart {
   }
 }
 
-/* eslint-disable-next-line no-shadow */
 export enum ConsonantType {
   onsetConsonant = "OC",
   codaConsonant = "CC",

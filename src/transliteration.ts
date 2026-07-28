@@ -53,8 +53,8 @@ export abstract class TransliterationScheme {
       opts.isElohim && "elohim" in this.divineName
         ? this.divineName.elohim
         : "adonai" in this.divineName
-        ? this.divineName.adonai
-        : this.divineName;
+          ? this.divineName.adonai
+          : this.divineName;
     let sRp = "";
     let i = 1;
     // Mark the cluster carrying the vowel to be capitalized with the
@@ -242,9 +242,11 @@ export class DefaultTransliterationScheme extends TransliterationScheme {
     return undefined;
   }
 
-  vowelExceptions(v: Vowel, txt: string): string | undefined {
+  // params are required by the abstract signature but unused while the body is commented out
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+  vowelExceptions(_v: Vowel, _txt: string): string | undefined {
     // // Final "אָה" as "ah"
-    // if (txt === "אָה" && v.syllable && v.syllable.isFinal && v.syllable.coda.length === 0) {
+    // if (_txt === "אָה" && _v.syllable && _v.syllable.isFinal && _v.syllable.coda.length === 0) {
     //   return "ah";
     // }
     return undefined;

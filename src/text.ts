@@ -1,20 +1,59 @@
-import { Word } from "./word";
-import { convertsQametsQatan } from "./utils/qametsQatan";
-import { sequence } from "./utils/sequence";
+import { Node } from "./node";
 import { holemWaw } from "./utils/holemWaw";
-import { Syllable } from "./syllable";
-import { Cluster } from "./cluster";
-import { Char } from "./char";
-import { splitGroup } from "./utils/regularExpressions";
+import { convertsQametsQatan } from "./utils/qametsQatan";
+import { splitGroup, taamim, taamimCaptureGroup } from "./utils/regularExpressions";
+import { sequence } from "./utils/sequence";
+import { Word } from "./word";
+
+export interface KetivQere {
+  /**
+   * The word or regex to match on
+   */
+  input: string | RegExp;
+  /**
+   * The output of the ketiv qere
+   *
+   * @remarks
+   * When using a callback, the paramerter `text` is the whole text of the word, and `input` is the input of the ketiv qere
+   */
+  output:
+    | string
+    /**
+     * @param text the whole text of the word
+     * @param input the input of the ketiv qere
+     */
+    | ((text: string, input: KetivQere["input"]) => string);
+  /**
+   * Whether to ignore taamin in the target string
+   *
+   * @defaultValue true
+   */
+  ignoreTaamim?: boolean;
+  /**
+   * Whether to capture taamin from the input and add it to the output
+   *
+   * @defaultValue false
+   */
+  captureTaamim?: boolean;
+  /**
+   * Optional syntax for the {@link input}
+   */
+  ketiv?: KetivQere["input"];
+  /**
+   * Optional syntax for the {@link output}
+   */
+  qere?: KetivQere["output"];
+}
 
 /**
- * options for determining syllabification that may differ according to reading traditions
+ * Options for determining syllabification that may differ according to reading traditions
  */
 export interface SylOpts {
   /**
-   * allows text with no niqqud to be passed; words with no niqqud or incomplete pointing will not be syllabified
+   * Allows text with no niqqud to be passed; words with no niqqud or incomplete pointing will not be syllabified
    *
-   * @defaultValue false
+   * @defaultValue `false`
+   *
    * @example
    * ```ts
    * const text = new Text("בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים", { allowNoNiqqud: true })
@@ -22,15 +61,16 @@ export interface SylOpts {
    * // [ 'בְּ', 'רֵא', 'שִׁ֖ית', 'בָּרא', 'אלהים' ]
    * // note 2nd word has incomplete pointing, and 3rd has none
    * ```
-   * @remarks
    *
-   * results in example displayed in reverse order to mimic Hebrew writing; the rightmost value is the 0 item
+   * @remarks
+   * Results in example displayed in reverse order to mimic Hebrew writing; the rightmost value is the 0 item
    */
   allowNoNiqqud?: boolean;
   /**
-   * determines whether to regard the sheva under the letters ילמ when preceded by the article and with a missing dagesh chazaq as as a _sheva na'_.
+   * Determines whether to regard the sheva under the letters ילמ when preceded by the article and with a missing dagesh chazaq as as a _sheva na'_.
    *
-   * @defaultValue true
+   * @defaultValue `true`
+   *
    * @example
    * ```ts
    * const usingDefault = new Text("הַיְאֹ֗ר");
@@ -43,21 +83,22 @@ export interface SylOpts {
    * ```
    *
    * @remarks
-   *
-   * results in example displayed in reverse order to mimic Hebrew writing; the rightmost value is the 0 item
+   * Results in example displayed in reverse order to mimic Hebrew writing; the rightmost value is the 0 item
    */
   article?: boolean;
   /**
-   * how to handle the code point \u{05BA} HOLAM HASER FOR VAV
+   * How to handle the code point \u{05BA} HOLAM HASER FOR VAV
    *
-   * @options
-   * * "update" - converts all holems in a vav + holem sequence where vav is a consonant to HOLAM HASER FOR VAV
-   * * "preserve" - leaves the text as is — does not remove HOLAM HASER FOR VAV, but does not update
-   * * "remove" - converts all HOLAM HASER FOR VAV to regular holem
+   * @remarks
+   * The following options are available:
+   * * `"update"` - converts all holems in a vav + holem sequence where vav is a consonant to HOLAM HASER FOR VAV
+   * * `"preserve"` - leaves the text as is — does not remove HOLAM HASER FOR VAV, but does not update
+   * * `"remove"` - converts all HOLAM HASER FOR VAV to regular holem
    *
-   * @defaultValue preserve
+   * @defaultValue `"preserve"`
    *
-   * @example update
+   * @example
+   * update
    * ```ts
    * const holemHaser = /\u{05BA}/u;
    * const str = "עָוֹן" // vav + holem
@@ -66,17 +107,19 @@ export interface SylOpts {
    * holemHaser.test(newStr); // true
    *
    * ```
-   * @example preserve
+   *
+   * @example
+   * preserve
    * ```ts
    * const holemHaser = /\u{05BA}/u;
    * const str = "עָוֹן" // vav + holem
    * holemHaser.test(str); // false
    * const newStr = new Text(updated, { holemHaser: "preserve" }).text;
    * holemHaser.test(newStr); // false
-   *
    * ```
    *
-   * @example remove
+   * @example
+   * remove
    * ```ts
    * const holemHaser = /\u{05BA}/u;
    * const str = "עָוֺן" // vav + holem haser
@@ -84,13 +127,100 @@ export interface SylOpts {
    * const newStr = new Text(updated, { holemHaser: "remove" }).text;
    * holemHaser.test(newStr); // false
    * ```
-   *
    */
   holemHaser?: "update" | "preserve" | "remove";
   /**
-   * determines whether to regard a sheva after a long vowel (excluding waw-shureq, see {@link wawShureq}) as a _sheva na'_, unless preceded by a meteg (see {@link shevaAfterMeteg}).
+   * An array of KetivQere objects for mimicing the Ketiv and Qere system found in manuscripts and texts
    *
-   * @defaultValue true
+   * @defaultValue `undefined`
+   *
+   * @example
+   * default
+   * ```ts
+   * const text = new Text("הִ֑וא", {
+   *  ketivQeres: [
+   *     {
+   *       input: "הִוא",
+   *       output: "הִיא"
+   *     }
+   *   ]
+   * });
+   * console.log(text.words[0].text);
+   * // הִיא
+   * ```
+   *
+   * @example
+   * Using optional syntax
+   * ```ts
+   * const text = new Text("הִ֑וא", {
+   *  ketivQeres: [
+   *     {
+   *       ketiv: "הִוא",
+   *       qere: "הִיא"
+   *     }
+   *   ]
+   * });
+   * console.log(text.words[0].text);
+   * // הִיא
+   * ```
+   *
+   * @example
+   * `captureTaamim` set to `true`
+   * ```ts
+   * const text = new Text("הִ֑וא", {
+   *  ketivQeres: [
+   *    {
+   *      input: "הִוא",
+   *      output: "הִיא",
+   *      captureTaamim: true
+   *    }
+   *  ]
+   * });
+   * console.log(text.words[0].text);
+   * // הִ֑יא
+   * ```
+   *
+   * @example
+   * `ignoreTaamim` set to `false`
+   * ```ts
+   * const text = new Text("הִ֑וא", {
+   *  ketivQeres: [
+   *    {
+   *      input: "הִ֯וא",
+   *      output: "הִיא",
+   *      ignoreTaamim: false
+   *    }
+   *  ]
+   * });
+   * console.log(text.words[0].text);
+   * // הִ֯וא
+   * // does not match because the input taam is not the same as the Text taam
+   * ```
+   *
+   * @example
+   * `input` as a regular expression, and `output` as a callback
+   * ```ts
+   * const text = new Text("וַיָּבִיאּוּ", {
+   *  ketivQeres: [
+   *    {
+   *      input: /אּ/,
+   *      output: (word, input) => word.replace(input, "א")
+   *    }
+   *  ]
+   * });
+   * console.log(text.words[0].text);
+   * // וַיָּבִיאוּ
+   * ```
+   *
+   * @remarks
+   * KetivQere objects allow for flexible handling of words, mimicking how ketiv/qeres are used in biblical manuscripts
+   */
+  ketivQeres?: KetivQere[];
+  /**
+   * Determines whether to regard a sheva after a long vowel (excluding waw-shureq, see {@link wawShureq}) as a _sheva na'_, unless preceded by a meteg (see {@link shevaAfterMeteg}).
+   *
+   * @defaultValue `true`
+   *
    * @example
    * ```ts
    * const usingDefault = new Text("יָדְךָ");
@@ -103,14 +233,14 @@ export interface SylOpts {
    * ```
    *
    * @remarks
-   *
-   * results in example displayed in reverse order to mimic Hebrew writing; the rightmost value is the 0 item
+   * Results in example displayed in reverse order to mimic Hebrew writing; the rightmost value is the 0 item
    */
   longVowels?: boolean;
   /**
-   * converts regular qamets characters to qamets qatan characters where appropriate. The former is a "long-vowel" whereas the latter is a "short-vowel."
+   * Converts regular qamets characters to qamets qatan characters where appropriate. The former is a "long-vowel" whereas the latter is a "short-vowel."
    *
-   * @defaultValue true
+   * @defaultValue `true`
+   *
    * @example
    * ```ts
    * const qQRegx = /\u{05C7}/u;
@@ -125,9 +255,10 @@ export interface SylOpts {
    */
   qametsQatan?: boolean;
   /**
-   * determines whether to regard the sheva after a meteg as a _sheva na'_.
+   * Determines whether to regard the sheva after a meteg as a _sheva na'_.
    *
-   * @defaultValue true
+   * @defaultValue `true`
+   *
    * @example
    * ```ts
    * const usingDefault = new Text("יְדַֽעְיָה");
@@ -150,9 +281,10 @@ export interface SylOpts {
    */
   shevaAfterMeteg?: boolean;
   /**
-   * determines whether to regard a sheva with a meteg as a _sheva na'_. This is also called a sheva ga'ya.
+   * Determines whether to regard a sheva with a meteg as a _sheva na'_. This is also called a sheva ga'ya.
    *
-   * @defaultValue true
+   * @defaultValue `true`
+   *
    * @example
    * ```ts
    * const usingDefault = new Text("אַ֥שְֽׁרֵי");
@@ -173,9 +305,10 @@ export interface SylOpts {
    */
   shevaWithMeteg?: boolean;
   /**
-   * determines whether to regard the sheva under the letters שׁשׂסצנמלוי when preceded by a waw-consecutive with a missing dagesh chazaq as a _sheva na'_, unless preceded by a meteg (see {@link shevaAfterMeteg}).
+   * Determines whether to regard the sheva under the letters שׁשׂסצנמלוי when preceded by a waw-consecutive with a missing dagesh chazaq as a _sheva na'_, unless preceded by a meteg (see {@link shevaAfterMeteg}).
    *
-   * @defaultValue true
+   * @defaultValue `true`
+   *
    * @example
    * ```ts
    * const usingDefault = new Text("וַיְצַחֵק֙");
@@ -189,9 +322,10 @@ export interface SylOpts {
    */
   sqnmlvy?: boolean;
   /**
-   * whether to syllabify incorrectly pointed text
+   * Determines whether to syllabify incorrectly pointed text
    *
-   * @defaultValue true
+   * @defaultValue `true`
+   *
    * @example
    * ```ts
    * const text1 = new Text("לְוּדְרְדַּיְל", { strict: true });
@@ -203,15 +337,14 @@ export interface SylOpts {
    *```
    *
    * @remarks
-   *
-   * when false results in syllabification can vary
-   *
+   * When `false` results in syllabification can vary.
    */
   strict?: boolean;
   /**
-   * determines whether to regard a sheva after a vav-shureq as vocal, unless preceded by a meteg (see {@link shevaAfterMeteg}).
+   * Determines whether to regard a sheva after a vav-shureq as vocal, unless preceded by a meteg (see {@link shevaAfterMeteg}).
    *
-   * @defaultValue true
+   * @defaultValue `true`
+   *
    * @example
    * ```ts
    * const usingDefault = new Text("וּלְמַזֵּר");
@@ -224,34 +357,111 @@ export interface SylOpts {
    * ```
    *
    * @remarks
-   *
-   * results in example displayed in reverse order to mimic Hebrew writing; the rightmost value is the 0 item
+   * Results in example displayed in reverse order to mimic Hebrew writing; the rightmost value is the 0 item
    */
   wawShureq?: boolean;
 }
 
 /**
- * `Text` is the main exported class.
- *
+ * Processes and analyzes Hebrew text with niqqud, offering syllabification
+ * and breakdown into linguistic components (words, syllables, clusters, chars).
  */
-export class Text {
+export class Text extends Node<Text, Word> {
   #original: string;
-  private options: SylOpts;
+  #options: SylOpts;
+  /**
+   * Cache for {@link SylOpts.ketivQeres}
+   *
+   * @privateRemarks
+   * This cache can be improved. Currently, it can only check for exact matches.
+   * So for example, if you have ketivQere options like this:
+   * ```js
+   * new Text("לֹא־נִפְלֵ֥את הִוא֙ מִמְּךָ֔ וְלֹ֥א רְחֹקָ֖ה הִֽוא׃", {
+   *  ketivQeres: [
+   *    { input: "הִוא", output: "הִוא" },
+   *  ]
+   * })
+   * ```
+   *
+   * The cache will miss because `הִוא֙` and `הִֽוא׃` are not exact matches, even though `ignoreTaamim` is `true`.
+   */
+  #ketivQereCache: { [k: string]: string } = {};
 
   /**
    * `Text` requires an input string,
    * and has optional arguments for syllabification,
-   * which can be read about in the {@page Syllabification} page
+   * which can be read about in the [Syllabification](/guides/syllabification) page
    *
    * @param text input string
    * @param options syllabification options
    */
   constructor(text: string, options: SylOpts = {}) {
-    this.options = this.setOptions(options);
-    this.#original = this.options.allowNoNiqqud ? text : this.validateInput(text);
+    super();
+    this.#options = this.#setOptions(options);
+    this.#original = this.#options.allowNoNiqqud ? text : this.#validateInput(text);
   }
 
-  private validateInput(text: string): string {
+  #applyKetivQere(text: string, kq: KetivQere) {
+    const input = kq.input ?? kq.ketiv;
+    const output = kq.output ?? kq.qere;
+    if (input instanceof RegExp) {
+      const match = text.match(kq.input);
+      if (match) {
+        return typeof output === "string" ? output : output(text, input);
+      }
+    }
+
+    if (input === text) {
+      return typeof output === "string" ? output : output(text, input);
+    }
+
+    return null;
+  }
+
+  #captureTaamim(text: string): IterableIterator<RegExpMatchArray> {
+    return text.matchAll(Text.#taamimCaptureGroup);
+  }
+
+  #processKetivQeres(text: string) {
+    if (this.#ketivQereCache[text]) {
+      return this.#ketivQereCache[text];
+    }
+
+    const ketivQeres = this.#options.ketivQeres;
+
+    if (!ketivQeres?.length) {
+      return text;
+    }
+
+    for (const ketivQere of ketivQeres) {
+      // capture white space because it is removed in textWithoutTaamim for easier checking
+      const startMatch = text.match(/^\s*/g) ?? "";
+      const endMatch = text.match(/\s*$/g);
+      const whiteSpaceBefore = startMatch ? startMatch[0] : null;
+      const whiteSpaceAfter = endMatch ? endMatch[0] : null;
+
+      const textWithoutTaamim = (ketivQere.ignoreTaamim ? this.#removeTaamim(text) : text).trim();
+
+      const appliedKetivQere = this.#applyKetivQere(textWithoutTaamim, ketivQere);
+
+      if (!appliedKetivQere) {
+        // if it doesn't match, trim the text and manually add the whitespace back
+        return whiteSpaceBefore + text.trim() + whiteSpaceAfter;
+      }
+
+      const taamimChars = ketivQere.captureTaamim ? this.#captureTaamim(text) : null;
+
+      const newText = taamimChars ? this.#setTaamim(appliedKetivQere, taamimChars) : appliedKetivQere;
+
+      this.#ketivQereCache[text] = newText;
+
+      return whiteSpaceBefore + newText + whiteSpaceAfter;
+    }
+
+    return text;
+  }
+
+  #validateInput(text: string) {
     const niqqud = /[\u{05B0}-\u{05BC}\u{05C7}]/u;
     if (!niqqud.test(text)) {
       throw new Error("Text must contain niqqud");
@@ -259,11 +469,64 @@ export class Text {
     return text;
   }
 
-  private validateOptions(options: SylOpts): SylOpts {
+  #validateKetivQeres(ketivQeres: SylOpts["ketivQeres"]) {
+    // if it's undefined, it's fine
+    if (!ketivQeres) {
+      return true;
+    }
+
+    // if there's no ketivQeres, it's fine
+    if (!ketivQeres.length) {
+      return true;
+    }
+
+    // validate the shape of the ketivQeres
+    for (const [index, ketivQere] of ketivQeres.entries()) {
+      let { input, output } = ketivQere;
+      const { ketiv, qere, ignoreTaamim, captureTaamim } = ketivQere;
+
+      if (!input && ketiv) {
+        input = ketiv;
+      }
+
+      if (input === undefined) {
+        throw new Error(`The ketivQere at index ${index} must have an input`);
+      }
+
+      if (!(input instanceof RegExp) && typeof input !== "string") {
+        throw new Error(`The input property of the ketivQere at index ${index} must be a string or RegExp`);
+      }
+
+      if (!output && qere) {
+        output = qere;
+      }
+
+      if (output === undefined) {
+        throw new Error(`The ketivQere at index ${index} must have an output`);
+      }
+
+      if (typeof output !== "string" && typeof output !== "function") {
+        throw new Error(`The output property of the ketivQere at index ${index} must be a string or function`);
+      }
+
+      if (ignoreTaamim && typeof ignoreTaamim !== "boolean") {
+        throw new Error(`The ignoreTaamim property of the ketivQere at index ${index} must be a boolean`);
+      }
+
+      if (captureTaamim && typeof captureTaamim !== "boolean") {
+        throw new Error(`The captureTaamim property of the ketivQere at index ${index} must be a boolean`);
+      }
+    }
+
+    return true;
+  }
+
+  #validateOptions(options: SylOpts) {
     const validOpts = [
       "allowNoNiqqud",
       "article",
       "holemHaser",
+      "ketivQeres",
       "longVowels",
       "qametsQatan",
       "shevaAfterMeteg",
@@ -276,6 +539,10 @@ export class Text {
       if (!validOpts.includes(k)) {
         throw new Error(`${k} is not a valid option`);
       }
+      if (k === "ketivQeres") {
+        this.#validateKetivQeres(v as SylOpts["ketivQeres"]);
+        continue;
+      }
       if (k === "holemHaser" && !["update", "preserve", "remove"].includes(String(v))) {
         throw new Error(`The value ${String(v)} is not a valid option for ${k}`);
       }
@@ -286,12 +553,22 @@ export class Text {
     return options;
   }
 
-  private setOptions(options: SylOpts): SylOpts {
-    const validOpts = this.validateOptions(options);
+  #removeTaamim(text: string) {
+    return text.replace(taamim, "");
+  }
+
+  #setOptions(options: SylOpts) {
+    const validOpts = this.#validateOptions(options);
     return {
       allowNoNiqqud: validOpts.allowNoNiqqud ?? false,
       article: validOpts.article ?? true,
       holemHaser: validOpts.holemHaser ?? "preserve",
+      ketivQeres:
+        validOpts.ketivQeres?.map((kq) => ({
+          ...kq,
+          captureTaamim: kq.captureTaamim ?? false,
+          ignoreTaamim: kq.ignoreTaamim ?? true
+        })) ?? [],
       longVowels: validOpts.longVowels ?? true,
       qametsQatan: validOpts.qametsQatan ?? true,
       shevaAfterMeteg: validOpts.shevaAfterMeteg ?? true,
@@ -302,101 +579,34 @@ export class Text {
     };
   }
 
-  private get normalized(): string {
+  #setTaamim(newText: string, taamimCapture: IterableIterator<RegExpMatchArray>) {
+    return [...taamimCapture].reduce((text, group) => {
+      return text.slice(0, group.index) + group[1] + text.slice(group.index);
+    }, newText);
+  }
+
+  static get #taamimCaptureGroup() {
+    return taamimCaptureGroup;
+  }
+
+  get #normalized() {
     return this.original.normalize("NFKD");
   }
 
-  private get sanitized(): string {
-    const text = this.normalized.trim();
+  get #sanitized() {
+    const text = this.#normalized.trim();
     const sequencedChar = sequence(text).flat();
     const sequencedText = sequencedChar.reduce((a, c) => a + c.text, "");
     // split text at spaces and maqqef, spaces are added to the array as separate entries
     const textArr = sequencedText.split(splitGroup).filter((group) => group);
-    const mapQQatan = this.options.qametsQatan ? textArr.map(convertsQametsQatan) : textArr;
-    const mapHolemWaw = mapQQatan.map((w) => holemWaw(w, this.options));
+    const mapQQatan = this.#options.qametsQatan ? textArr.map(convertsQametsQatan) : textArr;
+    const mapHolemWaw = mapQQatan.map((w) => holemWaw(w, this.#options));
     return mapHolemWaw.join("");
   }
 
   /**
-   * @returns the original string passed
+   * Gets all the {@link Char | Chars} in the Text
    *
-   * ```typescript
-   * const text: Text = new Text("הֲבָרֹות");
-   * text.original;
-   * // "הֲבָרֹות"
-   * ```
-   */
-  get original(): string {
-    return this.#original;
-  }
-
-  /**
-   * @returns a string that has been decomposed, sequenced, qamets qatan patterns converted to the appropriate unicode character (U+05C7), and holem-waw sequences corrected
-   *
-   * ```typescript
-   * import { Text } from "havarotjs";
-   * const text: Text = new Text("וַתָּשָׁב");
-   * text.text;
-   * // וַתָּשׇׁב
-   * ```
-   */
-  get text(): string {
-    return this.words.reduce((a, c) => `${a}${c.text}${c.whiteSpaceAfter ?? ""}`, "");
-  }
-
-  /**
-   * @returns a one dimensional array of Words
-   *
-   * ```typescript
-   * const text: Text = new Text("הֲבָרֹות");
-   * text.words;
-   * // [Word { original: "הֲבָרֹות" }]
-   * ```
-   */
-  get words(): Word[] {
-    const split = this.sanitized.split(splitGroup);
-    const groups = split.filter((group) => group);
-    const words = groups.map((word) => new Word(word, this.options));
-    const [first, ...rest] = words;
-    first.siblings = rest;
-
-    return words;
-  }
-
-  /**
-   * @returns a one dimensional array of Syllables
-   *
-   * ```typescript
-   * const text: Text = new Text("הֲבָרֹות");
-   * text.syllables;
-   * // [
-   * //    Syllable { original: "הֲ" },
-   * //    Syllable { original: "בָ" },
-   * //    Syllable { original: "רֹות" }
-   * //  ]
-   * ```
-   */
-  get syllables(): Syllable[] {
-    return this.words.map((word) => word.syllables).flat();
-  }
-
-  /**
-   * @returns a one dimensional array of Clusters
-   *
-   * ```typescript
-   * const text: Text = new Text("יָד");
-   * text.clusters;
-   * // [
-   * //    Cluster { original: "יָ" },
-   * //    Cluster { original: "ד" }
-   * //  ]
-   * ```
-   */
-  get clusters(): Cluster[] {
-    return this.syllables.map((syllable) => syllable.clusters).flat();
-  }
-
-  /**
    * @returns a one dimensional array of Chars
    *
    * ```typescript
@@ -409,7 +619,98 @@ export class Text {
    * //  ]
    * ```
    */
-  get chars(): Char[] {
+  get chars() {
     return this.clusters.map((cluster) => cluster.chars).flat();
+  }
+
+  /**
+   * Gets all the {@link Cluster | Clusters} in the Text
+   *
+   * @returns a one dimensional array of Clusters
+   *
+   * ```typescript
+   * const text: Text = new Text("יָד");
+   * text.clusters;
+   * // [
+   * //    Cluster { original: "יָ" },
+   * //    Cluster { original: "ד" }
+   * //  ]
+   * ```
+   */
+  get clusters() {
+    return this.syllables.map((syllable) => syllable.clusters).flat();
+  }
+
+  /**
+   * The original string passed
+   *
+   * @returns the original string passed
+   *
+   * @remarks
+   * The original string passed to the constructor that has not been normalized or sequenced. See {@link text}
+   */
+  get original() {
+    return this.#original;
+  }
+
+  /**
+   * Gets all the {@link Syllable | Syllables} in the Text
+   *
+   * @returns a one dimensional array of Syllables
+   *
+   * ```typescript
+   * const text: Text = new Text("הֲבָרֹות");
+   * text.syllables;
+   * // [
+   * //    Syllable { original: "הֲ" },
+   * //    Syllable { original: "בָ" },
+   * //    Syllable { original: "רֹות" }
+   * //  ]
+   * ```
+   */
+  get syllables() {
+    return this.words.map((word) => word.syllables).flat();
+  }
+
+  /**
+   * Gets the text
+   *
+   * @returns a string that has been decomposed, sequenced, qamets qatan patterns converted to the appropriate unicode character (U+05C7), and holem-waw sequences corrected
+   *
+   * @example
+   * ```ts
+   * import { Text } from "havarotjs";
+   * const text = new Text("וַתָּשָׁב");
+   * text.text;
+   * // וַתָּשׇׁב
+   * ```
+   */
+  get text() {
+    return this.words.reduce((a, c) => `${a}${c.text}${c.whiteSpaceAfter ?? ""}`, "");
+  }
+
+  /**
+   * Gets all the {@link Word | Words} in the Text
+   *
+   * @returns a one dimensional array of Words
+   *
+   * @example
+   * ```ts
+   * const text = new Text("הֲבָרֹות");
+   * text.words;
+   * // [ Word { original: "הֲבָרֹות" } ]
+   * ```
+   */
+  get words() {
+    const split = this.#sanitized.split(splitGroup);
+    const groups = split.filter((group) => group);
+    const words = groups.map((original) => {
+      const word = this.#processKetivQeres(original);
+      return new Word(word, this.#options, word !== original ? original : undefined);
+    });
+    const [first, ...rest] = words;
+    first.siblings = rest;
+
+    return words;
   }
 }

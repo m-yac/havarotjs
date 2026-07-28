@@ -1,3 +1,4 @@
+import { describe, expect, test } from "vitest";
 import { Text } from "../src/index";
 
 function testIsAccented(hebrew: string, isAccentedArray: boolean[]) {
@@ -8,7 +9,9 @@ function testIsAccented(hebrew: string, isAccentedArray: boolean[]) {
 
 // Taamim and their relation to stress from Introduction to Tiberian Hebrew Accents by Sung Jin Park
 // https://assets.cambridge.org/97811084/79936/excerpt/9781108479936_excerpt.pdf
-// hence the use of non-Hebrew terms (i.e. little zaqeph instead of zaqeph qatan)
+// hence the use of non-Hebrew terms (i.e. little zaqeph instead of zaqeph qatan).
+// The poetic accents are not complete, but rather the test aimed to deal with those that are most complicated.
+// Poetic accents from http://jamesdprice.com/images/21_Syntax_of_Accents_rev._ed..pdf
 describe("Test if a syllable is accented", () => {
   test("No taaimim, default last syllable", () => {
     testIsAccented("דָּבָר", [false, true]);
@@ -125,7 +128,7 @@ describe("Test if a syllable is accented", () => {
             testIsAccented("וַיֹּ֘אמֶר֮", [false, true, false]);
           });
 
-          xtest("zarqa on unaccented syllable", () => {
+          test.skip("zarqa on unaccented syllable", () => {
             // this will never pass
             testIsAccented("וַיֹּאמֶר֮", [false, true, false]);
           });
@@ -136,7 +139,7 @@ describe("Test if a syllable is accented", () => {
             testIsAccented("לָאוֹר֙", [false, true]);
           });
 
-          xtest("pashta on unaccented syllable", () => {
+          test.skip("pashta on unaccented syllable", () => {
             // I'm not sure if this is possible to have in a text
           });
 
@@ -148,6 +151,19 @@ describe("Test if a syllable is accented", () => {
             testIsAccented("יֹאשִׁיָּ֒הוּ֒", [false, false, true, false]);
           });
         });
+
+        describe("sinor", () => {
+          // note that the sinor is uses the same character as the zarqa, and like the zarqa is always postpositive
+          // unlike the zarqa, in MAM, there is not a "helper."
+          test("sinor on accented syllable", () => {
+            testIsAccented("אֱלֹהַי֮", [false, false, true]);
+          });
+
+          test.skip("sinor on unaccented syllable", () => {
+            // this will never pass
+            testIsAccented("פָּנֶיךָ֮", [false, true, false]);
+          });
+        });
       });
 
       describe("prepositive taamim", () => {
@@ -156,11 +172,11 @@ describe("Test if a syllable is accented", () => {
             testIsAccented("יַ֚עַן ", [true, false]);
           });
 
-          xtest("two yethibs", () => {
+          test.skip("two yethibs", () => {
             // unable to find an example of this
           });
 
-          xtest("yethib on unaccented syllable", () => {
+          test.skip("yethib on unaccented syllable", () => {
             // unable to find an example of this
           });
         });
@@ -170,13 +186,43 @@ describe("Test if a syllable is accented", () => {
             testIsAccented("כִּ֠י", [true]);
           });
 
-          xtest("great telisha on unaccented syllable", () => {
+          test.skip("great telisha on unaccented syllable", () => {
             // this will never pass
             testIsAccented("הָ֠עָם", [false, true]);
           });
 
           test("two great telishas", () => {
             testIsAccented("הָ֠עָ֠ם", [false, true]);
+          });
+        });
+
+        describe("ole-weyored", () => {
+          test("ole-weyored", () => {
+            // only the ole is prepositive
+            testIsAccented("רְשָׁ֫עִ֥ים", [false, false, true]);
+          });
+
+          test("ole alone", () => {
+            testIsAccented("טַ֫עַם", [true, false]);
+          });
+        });
+
+        describe("dechi", () => {
+          // for dechi, always assume the final syllable is accented
+          test("dechi on unaccented syllable", () => {
+            testIsAccented("נָ֭בוּב", [false, true]);
+          });
+
+          // this will incorrectly accent the final syllable
+          test.skip("dechi on accented syllable", () => {
+            testIsAccented("לַ֭יְלָה", [false, true]);
+          });
+        });
+
+        describe("gersh muqdam", () => {
+          // for gersh muqdam, always/mostly appears before a rebia, which receives the stress
+          test("will always be unaccented", () => {
+            testIsAccented("לֵ֝צִ֗ים", [false, true]);
           });
         });
       });
@@ -189,7 +235,7 @@ describe("Test if a syllable is accented", () => {
             testIsAccented("וַיִּבְכּוּ֩", [false, false, true]);
           });
 
-          xtest("little telisha on unaccented syllable", () => {
+          test.skip("little telisha on unaccented syllable", () => {
             // this will never pass
             testIsAccented("לְמַעַן֩", [false, true, false]);
           });
@@ -197,6 +243,14 @@ describe("Test if a syllable is accented", () => {
           test("two little telishas", () => {
             testIsAccented("לְמַ֩עַן֩", [false, true, false]);
           });
+        });
+      });
+
+      describe("prepositive taamim", () => {
+        test("sinnorit", () => {
+          // the sinnorit is incorrectly named in the Unicode spec as ZARQA (U+0598)
+          // it does not appear by itself
+          testIsAccented("אֱלֹ֘הֵ֤י", [false, false, true]);
         });
       });
     });

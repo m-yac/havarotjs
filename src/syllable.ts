@@ -1,106 +1,89 @@
 import { Cluster } from "./cluster";
-import { Char } from "./char";
-import { SyllablePart, Consonant, Vowel, HebrewMark, NonHebrew, ConsonantType } from "./syllablePart";
-import { CharToNameMap, charToNameMap, NameToCharMap, nameToCharMap } from "./utils/vowelMap";
-import { vowelsCaptureGroupWithSheva, hebChars } from "./utils/regularExpressions";
 import { Node } from "./node";
+import { Consonant, ConsonantType, HebrewMark, NonHebrew, SyllablePart, Vowel } from "./syllablePart";
+import type { ConsonantName, Flip, TaamimName } from "./utils/charMap";
+import { consonantNameToCharMap, taamimNameToCharMap, vowelCharToNameMap, vowelNameToCharMap } from "./utils/charMap";
+import { hebChars } from "./utils/regularExpressions";
 import { Word } from "./word";
 
-interface SyllableCharToNameMap extends CharToNameMap {
-  /* eslint-disable  @typescript-eslint/naming-convention */
-  "\u{05B0}": "SHEVA"; // HEBREW POINT HATAF SHEVA (U+05B0)
-  /**
-   * Unlike a holam vav construction which has the holam present, the shureq has no vowel character.
-   */
-  "\u{05D5}\u{05BC}": "SHUREQ"; // HEBREW LETTER VAV (U+05D5) + HEBREW POINT DAGESH OR MAPIQ (U+05BC)
-}
-
-const sylCharToNameMap: SyllableCharToNameMap = {
-  ...charToNameMap,
+const sylVowelCharToNameMap = {
+  ...vowelCharToNameMap,
   "\u{05B0}": "SHEVA",
   "\u{05D5}\u{05BC}": "SHUREQ"
-};
+} as const;
 
-interface SyllableNameToCharMap extends NameToCharMap {
-  /* eslint-disable  @typescript-eslint/naming-convention */
-  SHEVA: "\u{05B0}"; // HEBREW POINT HATAF SHEVA (U+05B0)
-  SHUREQ: "\u{05D5}\u{05BC}"; // HEBREW LETTER VAV (U+05D5) + HEBREW POINT DAGESH OR MAPIQ (U+05BC)
-}
+export type SyllableVowelCharToNameMap = typeof sylVowelCharToNameMap;
+export type SyllableVowel = keyof SyllableVowelCharToNameMap;
 
-const sylNameToCharMap: SyllableNameToCharMap = {
-  ...nameToCharMap,
+export type SyllableVowelNameToCharMap = Flip<SyllableVowelCharToNameMap>;
+export type SyllableVowelName = keyof SyllableVowelNameToCharMap;
+
+const sylVowelNameToCharMap = {
+  ...vowelNameToCharMap,
   SHEVA: "\u{05B0}",
   SHUREQ: "\u{05D5}\u{05BC}"
+} as const;
+
+export type SyllableParams = {
+  isClosed?: boolean;
+  isAccented?: boolean;
+  isFinal?: boolean;
 };
 
 /**
- * A `Syllable` is created from an array of [[`Clusters`]].
+ * The onset, nucleus, and coda of a {@link Syllable} - see {@link Syllable.structure}
  */
-export class Syllable extends Node<Syllable> {
+export type SyllableStructure = [Consonant[], Vowel[], Consonant[]];
+
+/**
+ * A subunit of a {@link Word} consisting of consonants, vowels, and other linguistic and ortographic features.
+ */
+export class Syllable extends Node<Syllable, Cluster, Word> {
+  #cachedParts: SyllablePart[] | null = null;
+  #cachedPartsNoGemination: SyllablePart[] | null = null;
+  #cachedStructure: SyllableStructure | null = null;
+  #cachedStructureNoGemination: SyllableStructure | null = null;
   #clusters: Cluster[];
   #isClosed: boolean;
   #isAccented: boolean;
-  #isFinal: boolean;
-  #word: Word | null = null;
-  #cachedParts: SyllablePart[] | null = null;
-  #cachedStructure: [Consonant[], Vowel[], Consonant[]] | null = null;
+  #vowelsCache: SyllableVowel[] | null = null;
+  #vowelNamesCache: SyllableVowelName[] | null = null;
 
   /**
+   * Creates a new Syllable
    *
-   * @param clusters
-   * @param param1
+   * @param clusters an array of {@link Cluster}
+   * @param options optional parameters
    *
-   * See the {@page Syllabification} page for how a syllable is determined.
+   * @example
+   * ```ts
+   * new Syllable([new Cluster("אָ"), new Cluster("ב")]);
+   * ```
+   *
+   * @remarks
+   * See the [Syllabification](/guides/syllabification) page for how a syllable is determined.
    * Currently, the Divine Name (e.g. יהוה), non-Hebrew text, and Hebrew punctuation (e.g. _passeq_, _nun hafucha_) are treated as a _single syllable_ because these do not follow the rules of Hebrew syllabification.
    */
-  constructor(clusters: Cluster[], { isClosed = false, isAccented = false, isFinal = false } = {}) {
+  constructor(clusters: Cluster[], { isClosed = false, isAccented = false }: SyllableParams = {}) {
     super();
     this.value = this;
     this.#clusters = clusters;
     this.#isClosed = isClosed;
     this.#isAccented = isAccented;
-    this.#isFinal = isFinal;
+  }
+
+  #isCharKeyOfSyllableVowelCharToNameMap(char: string): char is keyof SyllableVowelCharToNameMap {
+    return char in sylVowelCharToNameMap;
   }
 
   /**
-   * @returns a string that has been built up from the .text of its constituent Clusters
+   * Gets all the {@link Char | Characters} in the Syllable
    *
-   * ```typescript
-   * const text: Text = new Text("וַיִּקְרָ֨א");
-   * const sylText = text.syllables.map((syl) => syl.text);
-   * sylText;
-   * //  [
-   * //    "וַ"
-   * //    "יִּקְ"
-   * //    "רָ֨א"
-   * //  ]
-   * ```
-   */
-  get text(): string {
-    return this.clusters.reduce((init, cluster) => init + cluster.text, "");
-  }
-
-  /**
-   * @returns a one dimensional array of Clusters
+   * @returns a one dimensional array of {@link Char | characters}
    *
-   * ```typescript
-   * const text: Text = new Text("וַיִּקְרָ֨א");
-   * text.syllables[1].clusters;
-   * // [
-   * //    Cluster { original: "יִּ" },
-   * //    Cluster { original: "קְ" }
-   * //  ]
-   * ```
-   */
-  get clusters(): Cluster[] {
-    return this.#clusters;
-  }
-
-  /**
-   * @returns a one dimensional array of Chars
-   *
-   * ```typescript
-   * const text: Text = new Text("וַיִּקְרָ֨א");
+   * @example
+   * ```ts
+   * const text = new Text("וַיִּקְרָ֨א");
    * text.syllables[2].chars;
    * // [
    * //    Char { original: "ר" },
@@ -110,81 +93,141 @@ export class Syllable extends Node<Syllable> {
    * //  ]
    * ```
    */
-  get chars(): Char[] {
+  get chars() {
     return this.clusters.map((cluster) => cluster.chars).flat();
   }
 
-  private isVowelKeyOfSyllableCharToNameMap(vowel: string): vowel is keyof SyllableCharToNameMap {
-    return vowel in sylCharToNameMap;
-  }
-
   /**
-   * Returns the vowel character of the syllable
+   * Gets all the {@link Cluster | Clusters} in the Syllable
    *
-   * According to {@page Syllabification}, a sheva is a vowel and serves as the nucleus of a syllable.
-   * Unlike `Cluster`, a `Syllable` is concerned with linguistics, so a sheva **is** a vowel character
+   * @returns a one dimensional array of {@link Cluster | clusters}
    *
-   * ```typescript
-   * const text: Text = new Text("הַֽ֭יְחָבְרְךָ");
-   * text.syllables[0].vowel;
-   * // "\u{05B7}"
-   * text.syllables[1].vowel;
-   * // "\u{05B0}"
-   * ```
-   *
-   * @description
-   * This returns a single vowel character, even for most mater lectionis (e.g. a holam vav would return the holam, not the vav).
-   * The only exception is a shureq, which returns the vav and the dagesh because there is no vowel character for a shureq.
-   */
-  get vowel(): keyof SyllableCharToNameMap | null {
-    const nucleus = this.nucleus.map((p) => p.text).join("");
-
-    // for regular vowel characters and shureqs, this should match
-    if (this.isVowelKeyOfSyllableCharToNameMap(nucleus)) {
-      return nucleus;
-    }
-
-    // for maters or text with mixed scripts (e.g. Hebrew and Latin), we have to extract the vowel character
-    const match = this.text.match(vowelsCaptureGroupWithSheva);
-    if (match && this.isVowelKeyOfSyllableCharToNameMap(match[0])) {
-      return match[0];
-    }
-
-    return null;
-  }
-
-  /**
-   * Returns the vowel character name of the syllable
-   *
-   * According to {@page Syllabification}, a sheva is a vowel and serves as the nucleus of a syllable.
-   * Unlike `Cluster`, a `Syllable` is concerned with linguistics, so a sheva **is** a vowel character
-   *
-   * ```typescript
-   * const text: Text = new Text("הַֽ֭יְחָבְרְךָ");
-   * text.syllables[0].vowelName;
-   * // "PATAH"
-   * text.syllables[1].vowelName;
-   * // "SHEVA"
-   *
-   * @description
-   * This returns the vowel name, even for most mater lectionis (e.g. a holam vav would return the HOLAM, not the vav).
-   * The only exception is a shureq, which returns "SHUREQ" because there is no vowel character for a shureq.
+   * @example
+   * ```ts
+   * const text = new Text("וַיִּקְרָ֨א");
+   * text.syllables[1].clusters;
+   * // [
+   * //    Cluster { original: "יִּ" },
+   * //    Cluster { original: "קְ" }
+   * //  ]
    * ```
    */
-  get vowelName(): SyllableCharToNameMap[keyof SyllableCharToNameMap] | null {
-    const vowel = this.vowel;
-    return vowel ? sylCharToNameMap[vowel] : null;
+  get clusters() {
+    return this.#clusters;
   }
 
   /**
-   * Returns `true` if syllables contains the vowel character of the name passed in
+   * Gets the coda of the syllable, including gemination of the following syllable - see {@link structure}
    *
-   * According to {@page Syllabification}, a sheva is a vowel and serves as the nucleus of a syllable.
-   * Unlike `Cluster`, a `Syllable` is concerned with linguistics, so a sheva **is** a vowel character.
-   * It returns `true` for "SHEVA" only when the sheva is the vowel (i.e. a vocal sheva or sheva na').
+   * @returns the {@link Consonant | Consonants} of the coda, including any consonant geminated from the following syllable - see {@link codaNoGemination}
    *
-   * ```typescript
-   * const text: Text = new Text("הַיְחָבְרְךָ");
+   * @example
+   * ```ts
+   * const text = new Text("מַדּ֥וּעַ");
+   * text.syllables[0].coda.map((c) => c.text);
+   * // ["דּ"]
+   * text.syllables[0].codaNoGemination; // without gemination
+   * // []
+   * ```
+   *
+   * @remarks
+   * Taamim are not part of the coda; they are {@link HebrewMark} parts - see {@link parts}.
+   */
+  get coda() {
+    return this.structure[2];
+  }
+
+  /**
+   * Gets the coda of the syllable, ignoring gemination of the following syllable - see {@link structure}
+   *
+   * @returns the {@link Consonant | Consonants} of the coda, excluding any consonant geminated from the following syllable - see {@link coda}
+   *
+   * @example
+   * ```ts
+   * const text = new Text("יָ֥ם");
+   * text.syllables[0].codaNoGemination.map((c) => c.text);
+   * // ["ם"]
+   * ```
+   */
+  get codaNoGemination() {
+    return this.#resolveStructure().structureNoGemination[2];
+  }
+
+  /**
+   * Gets the consonant _characters_ of the syllable
+   *
+   * @returns a one dimensional array of consonant characters
+   *
+   * @example
+   * ```ts
+   * const text = new Text("רְ֭שָׁעִים");
+   * text.syllables[2].consonants;
+   * // ["ע", "י", "ם"]
+   * ```
+   *
+   * @remarks
+   * This returns a one dimensional array of consonant characters, even if the characters are not phonemic consonants,
+   * meaning even maters are returned as consonant characters. See the {@link structure} method if you need the consonants with phonemic value.
+   *
+   *
+   */
+  get consonants() {
+    return this.clusters.map((cluster) => cluster.consonants).flat();
+  }
+
+  /**
+   * Gets the names of the consonant _characters_ of the syllable
+   *
+   * @returns a one dimensional array of consonant character names
+   *
+   * @example
+   * ```ts
+   * const text = new Text("רְ֭שָׁעִים");
+   * text.syllables[2].consonantNames;
+   * // ["AYIN", "YOD", "FINAL_MEM"]
+   * ```
+   *
+   * @remarks
+   * This returns a one dimensional array of consonant names, even if the characters are not phonemic consonants,
+   * meaning even the name of maters are returned. See the {@link structure} method if you need the consonants with phonemic value.
+   */
+  get consonantNames() {
+    return this.clusters.map((cluster) => cluster.consonantNames).flat();
+  }
+
+  /**
+   * Checks if the syllable contains the consonant _character_ matching the name passed in
+   *
+   * @returns a boolean indicating if the syllable contains the consonant _character_ matching the name passed in
+   *
+   * @example
+   * ```ts
+   * const text = new Text("רְ֭שָׁעִים");
+   * text.syllables[2].hasConsonantName("AYIN");
+   * // true
+   * text.syllables[2].hasConsonantName("YOD");
+   * // false
+   * ```
+   *
+   * @remarks
+   * This checks if the syllable contains the given consonant name, even if the character is not a phonemic consonant.
+   */
+  hasConsonantName(name: ConsonantName) {
+    if (!consonantNameToCharMap[name]) {
+      throw new Error(`${name} is not a valid value`);
+    }
+
+    return this.consonantNames.includes(name);
+  }
+
+  /**
+   * Checks if the syllable contains the vowel character of the name passed in
+   *
+   * @returns a boolean indicating if the syllable contains the vowel character of the name passed in
+   *
+   * @example
+   * ```ts
+   * const text = new Text("הַיְחָבְרְךָ");
    * text.syllables[0].hasVowelName("PATAH");
    * // true
    *
@@ -197,128 +240,221 @@ export class Syllable extends Node<Syllable> {
    * // false
    * ```
    *
-   * @description
+   * @remarks
    * This returns a boolean if the vowel character is present, even for most mater lectionis (e.g. in a holam vav construction, "HOLAM" would return true)
    * The only exception is a shureq, because there is no vowel character for a shureq.
+   * According to [Syllabification](/guides/syllabification), a sheva is a vowel and serves as the nucleus of a syllable.
+   * Unlike `Cluster`, a `Syllable` is concerned with linguistics, so a sheva **is** a vowel character.
+   * It returns `true` for "SHEVA" only when the sheva is the vowel (i.e. a vocal sheva or sheva na').
    */
-  hasVowelName(name: keyof SyllableNameToCharMap): boolean {
-    if (!sylNameToCharMap[name]) {
+  hasVowelName(name: SyllableVowelName) {
+    if (!sylVowelNameToCharMap[name]) {
       throw new Error(`${name} is not a valid value`);
     }
 
-    if (name === "SHUREQ") {
-      // if any cluster has a shureq, then that should be the defacto vowel
-      return this.clusters.filter((c) => c.isShureq).length ? true : false;
-    }
-
-    const isShevaSilent = name === "SHEVA" && this.clusters.filter((c) => c.hasVowel).length ? true : false;
-    return !isShevaSilent && this.text.indexOf(sylNameToCharMap[name]) !== -1 ? true : false;
+    return this.vowelNames.includes(name);
   }
 
   /**
-   * @returns true if Syllable is closed
+   * Checks if the syllable contains the taamim character of the name passed in
    *
-   * a closed syllable in Hebrew is a CVC or CVCC type, a mater letter does not close a syllable
+   * @returns a boolean indicating if the syllable contains the taamim character of the name passed in
    *
-   * ```typescript
-   * const text: Text = new Text("וַיִּקְרָ֨א");
-   * text.syllables[0].isClosed; // i.e. "וַ"
+   * @example
+   * ```ts
+   * const text = new Text("הָאָ֖רֶץ");
+   * text.syllables[1].hasTaamName("TIPEHA");
    * // true
-   * text.syllables[2].isClosed; // i.e. "רָ֨א"
-   * // false
    * ```
-   */
-  get isClosed(): boolean {
-    return this.#isClosed;
-  }
-
-  /**
-   * @param closed a boolean for whether the Syllable is closed
    *
-   * a closed syllable in Hebrew is a CVC or CVCC type, a _mater_ letter does not close a syllable
+   * @remarks
+   * Note: it only checks according to the character name, not its semantic meaning.
+   * E.g. "כֵֽן׃" would be `true` when checking for `"METEG"`, not silluq
    */
-  set isClosed(closed: boolean) {
-    this.#isClosed = closed;
+  hasTaamName(name: TaamimName) {
+    if (!taamimNameToCharMap[name]) {
+      throw new Error(`${name} is not a valid value`);
+    }
+    return this.taamimNames.includes(name);
   }
 
   /**
+   * Checks if the Syllable is accented
+   *
    * @returns true if Syllable is accented
    *
-   * an accented syllable receives stress
-   *
-   * ```typescript
-   * const text: Text = new Text("וַיִּקְרָ֨א"); // note the taam over the ר
+   * @example
+   * ```ts
+   * const text = new Text("וַיִּקְרָ֨א"); // note the taam over the ר
    * text.syllables[0].isAccented; // i.e. "וַ"
    * // false
    * text.syllables[2].isAccented; // i.e. "רָ֨א"
    * // true
    * ```
+   *
+   * @remarks
+   * An accented syllable receives stress, and is typically indicated by the presence of a taam character
    */
-  get isAccented(): boolean {
+  get isAccented() {
     return this.#isAccented;
   }
 
   /**
-   * @param accented a boolean for whether the Syllable is accented
+   * Sets whether the Syllable is accented
    *
-   * an accented syllable receives stress
+   * @param accented a boolean indicating if the Syllable is accented
+   *
    */
   set isAccented(accented: boolean) {
     this.#isAccented = accented;
   }
 
   /**
+   * Checks if the Syllable is closed
+   *
+   * @returns true if Syllable is closed
+   *
+   * @example
+   * ```ts
+   * const text = new Text("וַיִּקְרָ֨א");
+   * text.syllables[0].isClosed; // i.e. "וַ"
+   * // true
+   * text.syllables[2].isClosed; // i.e. "רָ֨א"
+   * // false
+   * ```
+   *
+   * @remarks
+   * A closed syllable in Hebrew is a CVC or CVCC type, a mater letter does not close a syllable
+   */
+  get isClosed() {
+    return this.#isClosed;
+  }
+
+  /**
+   * Sets whether the Syllable is closed
+   *
+   * @param closed a boolean for whether the Syllable is closed
+   *
+   */
+  set isClosed(closed: boolean) {
+    this.#isClosed = closed;
+  }
+
+  /**
+   * Checks if the Syllable is the final syllable in a {@link Word}
+   *
    * @returns true if Syllable is final
    *
-   * ```typescript
-   * const text: Text = new Text("וַיִּקְרָ֨א");
+   * @example
+   * ```ts
+   * const text = new Text("וַיִּקְרָ֨א");
    * text.syllables[0].isFinal; // i.e. "וַ"
    * // false
    * text.syllables[2].isFinal; // i.e. "רָ֨א"
    * // true
    * ```
    */
-  get isFinal(): boolean {
-    return this.#isFinal;
+  get isFinal() {
+    return this.word?.isSyllableFinal(this) ?? false;
   }
 
   /**
-   * @param final a boolean for whether the Syllable is the final Syallble
-   */
-  set isFinal(final: boolean) {
-    this.#isFinal = final;
-  }
-
-  /**
-   * @returns the the list of SyllableParts which make up the Syllable, i.e. its Consonants, Vowels, HebrewMarks, and NonHebrew characters.
+   * Checks if the Syllable is the initial syllable in a {@link Word}
    *
-   * ```typescript
-   * const text: Text = new Text("וּמַדּ֖וּעַ");
-   * text.syllables.map((s) => s.parts().map((p) => [p.type, p.text]))
-   * // [
-   * //   [ [ 'V', 'וּ' ] ],
-   * //   [ [ 'C', 'מ' ], [ 'V', 'ַ' ], [ 'C', 'דּ' ] ],
-   * //   [ [ 'C', 'דּ' ], [ 'H', '֖' ], [ 'V', 'וּ' ] ],
-   * //   [ [ 'V', 'ַ' ], [ 'C', 'ע' ] ]
-   * // ]
+   * @returns true if Syllable is initial
+   *
+   * @example
+   * ```ts
+   * const text = new Text("וַיִּקְרָ֨א");
+   * text.syllables[0].isInitial; // i.e. "וַ"
+   * // true
+   * text.syllables[2].isInitial; // i.e. "רָ֨א"
+   * // false
    * ```
    */
-  get parts(): SyllablePart[] {
-    if (this.#cachedParts) {
-      return this.#cachedParts;
-    }
+  get isInitial() {
+    return this.word?.isSyllableInitial(this) ?? false;
+  }
+
+  /**
+   * Returns the nucleus of the syllable - see {@link structure}
+   *
+   * @returns the {@link Vowel | Vowels} of the nucleus - see {@link structure}
+   *
+   * @example
+   * ```ts
+   * const text = new Text("יָ֥ם");
+   * text.syllables[0].nucleus.map((v) => v.text);
+   * // ["\u{05B8}"]
+   * ```
+   * @remarks
+   * The nucleus is the vowel of the syllable - present in every syllable and containing its {@link vowels} (with any materes lecticonis) or a shureq.
+   * Taamim are not part of the nucleus; they are {@link HebrewMark} parts - see {@link parts}.
+   */
+  get nucleus() {
+    return this.structure[1];
+  }
+
+  /**
+   * Returns the onset of the syllable - see {@link structure}
+   *
+   * @returns the {@link Consonant | Consonants} of the onset - see {@link structure}
+   *
+   * @example
+   * ```ts
+   * const text = new Text("יָ֥ם");
+   * text.syllables[0].onset.map((c) => c.text);
+   * // ["י"]
+   * ```
+   * @remarks
+   * The onset is any initial consonant of the syllable - present in every syllable except those containing a except word-initial shureq or a furtive patah.
+   */
+  get onset() {
+    return this.structure[0];
+  }
+
+  /**
+   * Returns the position of the Syllable within its {@link Word}
+   *
+   * @returns the position of the Syllable, or `-1` if the Syllable is not part of a Word
+   *
+   * @example
+   * ```ts
+   * const text = new Text("וַיִּקְרָ֨א");
+   * text.syllables[0].position;
+   * // 0
+   * text.syllables[2].position;
+   * // 2
+   * ```
+   */
+  get position() {
+    return this.word?.syllablePosition(this) ?? -1;
+  }
+
+  /**
+   * Builds the {@link SyllablePart | SyllableParts} of this syllable
+   *
+   * @returns `partsNoGemination`, plus `parts` which additionally contains any consonant
+   * geminated from the following syllable. When no gemination applies the two are the
+   * *same array*, so callers can compare them by reference to skip redundant work.
+   */
+  #buildParts(): { parts: SyllablePart[]; partsNoGemination: SyllablePart[] } {
     const parts: SyllablePart[] = [];
     let seenVowel = false;
+
     for (let i = 0; i < this.clusters.length; i++) {
-      let chars = this.clusters[i].chars;
+      const cluster = this.clusters[i];
+      let chars = cluster.chars;
+
       // Add a shureq as a new Vowel
-      if (this.clusters[i].isShureq) {
+      if (cluster.isShureq) {
         parts.push(new Vowel(chars.slice(0, 2)));
         seenVowel = true;
         chars = chars.slice(2);
       }
+
       // Add a mater as an additional character of the preceding Vowel
-      if (this.clusters[i].isMater) {
+      if (cluster.isMater) {
         for (let j = parts.length - 1; j >= 0; j--) {
           if (parts[j] instanceof Vowel) {
             parts[j] = new Vowel(parts[j].chars.concat([chars[0]]));
@@ -328,6 +464,7 @@ export class Syllable extends Node<Syllable> {
           }
         }
       }
+
       // Furtive patah: If the syllable is final, contains only punctuation and
       // non-hebrew after this cluster, and is either a he with dagesh followed
       // by a patah or an ayin or het followed by a patah, then add the patah
@@ -351,6 +488,7 @@ export class Syllable extends Node<Syllable> {
           chars = chars.slice(3);
         }
       }
+
       for (const char of chars) {
         // Add a consonant character as a new Consonant
         if (char.sequencePosition === 0) {
@@ -384,7 +522,15 @@ export class Syllable extends Node<Syllable> {
             seenVowel = true;
           }
         }
-        // Add any other Hebrew character as a new a HebrewMark
+        // Add any other Hebrew character as a new HebrewMark.
+        //
+        // NOTE: this deliberately tests `hebChars` rather than `char.isNotHebrew`. The
+        // latter is `sequencePosition === 10`, i.e. "findPos had no category for this",
+        // which is true of nine assigned Hebrew characters (maqaf, sof pasuq, paseq,
+        // nun hafukha, geresh, gershayim, the upper/lower dots, and the masora circle)
+        // since `taamim` was narrowed to [֑-֮]. Using it here would misfile
+        // all of them as NonHebrew. `Cluster.isNotHebrew` tests the block directly, so
+        // this keeps char- and cluster-level classification consistent within `parts`.
         else if (hebChars.test(char.text)) {
           parts.push(new HebrewMark([char]));
         }
@@ -394,8 +540,9 @@ export class Syllable extends Node<Syllable> {
         }
       }
     }
+
     // Give every SyllablePart a reference to this Syllable, and compute some
-    // conditions needed for gemination check below
+    // conditions needed for the gemination check below
     let [hasNonShevaVowel, hasConsonantAfterVowel] = [false, false];
     for (const part of parts) {
       part.syllable = this;
@@ -405,38 +552,126 @@ export class Syllable extends Node<Syllable> {
         hasConsonantAfterVowel = true;
       }
     }
-    // If this is a non-final syllable, this syllable has a non-Sheva vowel, the
+
+    // If this is a non-final syllable, this syllable has a non-sheva vowel, the
     // syllable is open (i.e. there is no consonant after the vowel), and the
     // first cluster of the next syllable has a dagesh which is not part of a
     // shureq, then add the consonant and its dagesh from the next syllable as
     // an additional Consonant (marked as fromGemination)
+    const next = this.next;
     if (
       !this.isFinal &&
       hasNonShevaVowel &&
       !hasConsonantAfterVowel &&
-      this.next instanceof Syllable &&
-      this.next.clusters.length > 0 &&
-      /\u{05BC}/u.test(this.next.clusters[0].text) &&
-      !this.next.clusters[0].isShureq
+      next !== null &&
+      next instanceof Syllable &&
+      next.clusters.length > 0 &&
+      /\u{05BC}/u.test(next.clusters[0].text) &&
+      !next.clusters[0].isShureq
     ) {
-      const chars = this.next.clusters[0].chars.filter((c) => c.sequencePosition <= 2);
-      const part = new Consonant(chars, ConsonantType.codaGeminatedConsonant);
-      part.syllable = this;
-      parts.push(part);
+      const geminated = new Consonant(
+        next.clusters[0].chars.filter((c) => c.sequencePosition <= 2),
+        ConsonantType.codaGeminatedConsonant
+      );
+      geminated.syllable = this;
+      return { parts: [...parts, geminated], partsNoGemination: parts };
     }
-    this.#cachedParts = parts;
-    return parts;
+
+    return { parts, partsNoGemination: parts };
+  }
+
+  #resolveParts(): { parts: SyllablePart[]; partsNoGemination: SyllablePart[] } {
+    if (this.#cachedParts && this.#cachedPartsNoGemination) {
+      return { parts: this.#cachedParts, partsNoGemination: this.#cachedPartsNoGemination };
+    }
+
+    const built = this.#buildParts();
+
+    // Only cache once the syllable is attached to a Word. Both `isFinal` (used for the
+    // furtive patah) and `next` (used for gemination) read tree wiring that is set after
+    // construction, so caching any earlier would freeze an incorrect result permanently.
+    if (this.word) {
+      this.#cachedParts = built.parts;
+      this.#cachedPartsNoGemination = built.partsNoGemination;
+    }
+
+    return built;
+  }
+
+  static #toStructure(parts: SyllablePart[]): SyllableStructure {
+    const onset: Consonant[] = [];
+    const nucleus: Vowel[] = [];
+    const coda: Consonant[] = [];
+
+    for (const part of parts) {
+      if (part instanceof Consonant) {
+        if (nucleus.length === 0) {
+          onset.push(part);
+        } else {
+          coda.push(part);
+        }
+      } else if (part instanceof Vowel) {
+        if (coda.length !== 0) {
+          throw new Error("Syllable contains a consonant between two vowels, i.e. does not have (C)V(C) structure");
+        }
+        nucleus.push(part);
+      }
+    }
+
+    return [onset, nucleus, coda];
+  }
+
+  #resolveStructure(): { structure: SyllableStructure; structureNoGemination: SyllableStructure } {
+    if (this.#cachedStructure && this.#cachedStructureNoGemination) {
+      return { structure: this.#cachedStructure, structureNoGemination: this.#cachedStructureNoGemination };
+    }
+
+    const { parts, partsNoGemination } = this.#resolveParts();
+    const structureNoGemination = Syllable.#toStructure(partsNoGemination);
+    // When no gemination applies `#buildParts` returns the same array for both, so the
+    // two structures are the same object too - no need to build it a second time
+    const structure = parts === partsNoGemination ? structureNoGemination : Syllable.#toStructure(parts);
+
+    if (this.word) {
+      this.#cachedStructure = structure;
+      this.#cachedStructureNoGemination = structureNoGemination;
+    }
+
+    return { structure, structureNoGemination };
   }
 
   /**
-   * @returns the structure of the Syllable, i.e. the syllable's onset, nucleus, and coda.
-   * - The onset is any initial consonant of the syllable - present in every syllable except those containing a except word-initial shureq or a furtive patah.
-   * - The nucleus is the vowel of the syllable - present in every syllable and containing its {@link vowel} (with any materes lecticonis) or a shureq.
-   * - The coda is all final consonants of the syllable - not including any matres lecticonis, and including the onset of the subsequent syllable if the subsequent syllable is geminated.
+   * Gets the {@link SyllablePart | SyllableParts} which make up the syllable, i.e. its
+   * {@link Consonant | Consonants}, {@link Vowel | Vowels}, {@link HebrewMark | HebrewMarks},
+   * and {@link NonHebrew} characters
    *
-   * ```typescript
-   * const text: Text = new Text("וּמַדּ֖וּעַ");
-   * text.syllables.map((s) => s.structure.map((st) => st.map((p) => p.text)))
+   * @returns a one dimensional array of the parts of the syllable, in order
+   *
+   * @example
+   * ```ts
+   * const text = new Text("וּמַדּ֖וּעַ");
+   * text.syllables.map((s) => s.parts.map((p) => [p.type, p.text]));
+   * // [
+   * //   [ [ 'V', 'וּ' ] ],
+   * //   [ [ 'C', 'מ' ], [ 'V', 'ַ' ], [ 'C', 'דּ' ] ],
+   * //   [ [ 'C', 'דּ' ], [ 'H', '֖' ], [ 'V', 'וּ' ] ],
+   * //   [ [ 'V', 'ַ' ], [ 'C', 'ע' ] ]
+   * // ]
+   * ```
+   */
+  get parts(): SyllablePart[] {
+    return this.#resolveParts().parts;
+  }
+
+  /**
+   * Gets the structure of the syllable
+   *
+   * @returns the structure of the Syllable, i.e. the syllable's onset, nucleus, and coda
+   *
+   * @example
+   * ```ts
+   * const text = new Text("וּמַדּ֖וּעַ");
+   * text.syllables.map((s) => s.structure.map((st) => st.map((p) => p.text)));
    * // [
    * //   [ [], [ 'וּ' ], [] ],
    * //   [ [ 'מ' ], [ 'ַ' ], [ 'דּ' ] ],
@@ -444,68 +679,170 @@ export class Syllable extends Node<Syllable> {
    * //   [ [], [ 'ַ' ], [ 'ע' ] ]
    * // ]
    * ```
+   *
+   * @remarks
+   * - The onset is any initial consonant of the syllable - present in every syllable except those containing a except word-initial shureq or a furtive patah.
+   * - The nucleus is the vowel of the syllable - present in every syllable and containing its {@link vowels} (with any materes lecticonis) or a shureq.
+   * - The coda is all final consonants of the syllable - not including any matres lecticonis, and including the onset of the subsequent syllable if the subsequent syllable is geminated. See {@link codaNoGemination} to exclude the latter.
+   *
+   * Taamim and other marks are not part of the structure; they are {@link HebrewMark} parts - see {@link parts}.
+   *
+   * @throws if the syllable does not have `(C)V(C)` structure, i.e. if a consonant separates two vowels
    */
-  get structure(): [Consonant[], Vowel[], Consonant[]] {
-    if (this.#cachedStructure) {
-      return this.#cachedStructure;
+  get structure(): SyllableStructure {
+    return this.#resolveStructure().structure;
+  }
+
+  /**
+   * Gets all the taamim characters in the Syllable
+   *
+   * @returns a one dimensional array of taamim characters in the syllable
+   *
+   * @example
+   * ```ts
+   * const text = new Text("הָאָ֖רֶץ");
+   * text.syllables[1].taamim;
+   * // ["\u{596}"]
+   * ```
+   */
+  get taamim() {
+    return this.clusters.map((c) => c.taamim).flat();
+  }
+
+  /**
+   * Gets all the taamim names in the Syllable
+   *
+   * @returns a one dimensional array of taamim names in the syllable
+   *
+   * @example
+   * ```ts
+   * const text = new Text("הָאָ֖רֶץ");
+   * text.syllables[1].taamimNames;
+   * // ["TIPEHA"]
+   * ```
+   */
+  get taamimNames() {
+    return this.clusters.map((c) => c.taamimNames).flat();
+  }
+
+  /**
+   * The text of the syllable
+   *
+   * @returns the sequenced and normalized text of the syllable
+   *
+   * @example
+   * ```ts
+   * const text = new Text("וַיִּקְרָ֨א");
+   * text.syllables.map((syl) => syl.text);
+   * //  [
+   * //    "וַ"
+   * //    "יִּקְ"
+   * //    "רָ֨א"
+   * //  ]
+   * ```
+   *
+   * @remarks
+   * This returns a string that has been built up from the .text of its constituent Clusters.
+   */
+  get text() {
+    return this.clusters.map((c) => c.text).join("");
+  }
+
+  /**
+   * Gets the names of the vowel characters in the syllable
+   *
+   * @returns an array of names of vowel characters in the syllable
+   *
+   * @example
+   * ```ts
+   * const text = new Text("מִתָּ֑͏ַ֜חַת");
+   * text.syllables[1].vowelNames;
+   * // ["QAMATS", "PATAH"]
+   * ```
+   *
+   * @remarks
+   * This returns an array of names of vowel characters in the syllable, but not for mater lectionis (e.g. a holam vav would return the HOLAM, not the vav).
+   * The only exception is a shureq, which returns "SHUREQ" because there is no vowel character for a shureq.
+   * It is very uncommon to have multiple vowel characters in a syllable.
+   * According to [Syllabification](/guides/syllabification), a sheva is a vowel and serves as the nucleus of a syllable.
+   * Unlike `Cluster`, a `Syllable` is concerned with linguistics, so a sheva **is** a vowel character.
+   */
+  get vowelNames() {
+    if (this.#vowelNamesCache) {
+      return this.#vowelNamesCache;
     }
-    const onset: Consonant[] = [];
-    const nucleus: Vowel[] = [];
-    const coda: Consonant[] = [];
-    for (const p of this.parts) {
-      if (p instanceof Consonant) {
-        if (nucleus.length === 0) {
-          onset.push(p);
-        } else {
-          coda.push(p);
+
+    const vowelNames = this.vowels
+      .reduce((a, vowel) => {
+        if (sylVowelCharToNameMap[vowel]) {
+          a.push(sylVowelCharToNameMap[vowel]);
+        }
+        return a;
+      }, [] as SyllableVowelName[])
+      .flat();
+
+    return (this.#vowelNamesCache = vowelNames);
+  }
+
+  /**
+   * Gets the vowel characters of the syllable
+   *
+   * @returns an array of vowel characters in the syllable
+   *
+   * @example
+   * ```ts
+   * const text = new Text("מִתָּ֑͏ַ֜חַת");
+   * text.syllables[1].vowels;
+   * // ["\u{05B8}", "\u{05B7}"]
+   * ```
+   *
+   * @remarks
+   * This returns a single vowel character, even for most mater lectionis (e.g. a holam vav would return the holam, not the vav).
+   * The only exception is a shureq, which returns the vav and the dagesh because there is no vowel character for a shureq.
+   * It is very uncommon to have multiple vowel characters in a syllable.
+   * According to [Syllabification](/guides/syllabification), a sheva is a vowel and serves as the nucleus of a syllable.
+   * Unlike `Cluster`, a `Syllable` is concerned with linguistics, so a sheva **is** a vowel character
+   */
+  get vowels() {
+    if (this.#vowelsCache) {
+      return this.#vowelsCache;
+    }
+    // the nucleus returns as many Vowels as there are in the syllable, and unlike the old
+    // string-based nucleus it already excludes taamim, so no removeTaamim call is needed
+    const shureq = sylVowelNameToCharMap.SHUREQ;
+    const vowels = this.nucleus.reduce((a, vowel) => {
+      // a shureq has no vowel character of its own - it is the vav plus its dagesh
+      if (vowel.text.includes(shureq)) {
+        a.push(shureq);
+        return a;
+      }
+      // otherwise take the vowel character(s), skipping any mater consonant
+      for (const char of vowel.text) {
+        if (this.#isCharKeyOfSyllableVowelCharToNameMap(char)) {
+          a.push(char);
         }
       }
-      if (p instanceof Vowel) {
-        if (coda.length === 0) {
-          nucleus.push(p);
-        } else {
-          throw new Error("Syllable contains a consonant between two vowels, i.e. does not have (C)V(C) structure");
-        }
-      }
-    }
-    const structure: [Consonant[], Vowel[], Consonant[]] = [onset, nucleus, coda];
-    this.#cachedStructure = structure;
-    return structure;
+      return a;
+    }, [] as SyllableVowel[]);
+
+    return (this.#vowelsCache = vowels);
   }
 
   /**
-   * Returns the onset of the syllable - see {@link structure}
+   * Gets the {@link Word} to which the syllable belongs
+   *
+   * @returns the `Word` to which the syllable belongs
+   *
+   * @example
+   * ```ts
+   * const text = new Text("הָאָ֖רֶץ");
+   * text.syllables[0].word;
+   * // Word {
+   * //   text: "הָאָ֖רֶץ"
+   * // }
+   * ```
    */
-  get onset(): Consonant[] {
-    return this.structure[0];
-  }
-
-  /**
-   * @returns the nucleus of the syllable - see {@link structure}
-   */
-  get nucleus(): Vowel[] {
-    return this.structure[1];
-  }
-
-  /**
-   * @returns the coda of the syllable, including gemination - see {@link structure}
-   */
-  get coda(): Consonant[] {
-    return this.structure[2];
-  }
-
-  /**
-   * @returns the coda of the syllable, ignoring gemination - see {@link structure}
-   */
-  get codaNoGemination(): Consonant[] {
-    return this.structure[2].filter((p) => !p.fromGemination);
-  }
-
-  get word(): Word | null {
-    return this.#word;
-  }
-
-  set word(word: Word | null) {
-    this.#word = word;
+  get word() {
+    return this.parent?.value ?? null;
   }
 }

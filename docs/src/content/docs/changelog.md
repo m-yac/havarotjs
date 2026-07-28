@@ -1,4 +1,80 @@
-# Changelog
+---
+title: Changelog
+---
+
+## 2025-09-11 0.25.4
+
+- Fix #211 where taamim were being stripped from non-matching `ketivQere` (PR #212)
+
+## 2025-09-10 0.25.3
+
+- Fix #209 the `ketivQere` option adding extra whitespace to non-matching and non-Hebrew text (PR #210)
+
+## 2025-04-05 0.25.2
+
+- Fix #197 by treating the non-standard spelling of half-vowels before a sheva as full vowel (PR #200)
+
+## 2025-01-23 0.25.1
+
+- Fix עָמְרִֽי with a meteg/silluq failing (PR #193)
+
+## 2025-01-21 0.25.0
+
+- Updates `cluster.isMater` so that segol-he and tsere-he are no longer identified as maters (PR #191)
+
+## 2024-09-19 0.24.1
+
+- Fix whitespace issues around `ketivQere` feature (PR #182)
+- Adds optional syntac for `ketivQere` feature (PR #183)
+
+## 2024-09-11 0.24.0
+
+- Add `ketivQere` feature (PR #178)
+
+## 2024-08-02 0.23.3
+
+- Fix issue with incorrect qamets qatan (PR #174)
+
+## 2024-05-07 0.23.2
+
+- Fix issue with two shevas where the first has a meteg (PR #171)
+
+## 2024-04-26 0.23.1
+
+- Added in forgotten props and methods to the `Word` and `Syllable` objects (PR #168)
+
+## 2024-04-25 0.23.0
+
+- `Word`, `Syllable`, and `Cluster` (PR #167)
+  - `.consonants` gets all the consonant characters
+  - `.consonantNames` gets all the names of the consonant characters
+  - `.hasConsonantName()` checks if a consonant character matching the name is present
+  - `.taamim` gets all the taamim characters
+  - `.taamimNames` gets all the names of the taamim characters
+  - `.hasTaamName()` checks if a taam character matching the name is present
+  - `.vowels` gets all the vowel characters
+  - `.vowelNames` gets all the names of the vowel characters
+  - `.hasVowelName()` checks if a vowel character matching the name is present
+- `Char`
+  - `.characterName` returns the name of the character
+  - `.isCharacterName` checks if the character matches the name given
+
+## 2024-03-09 0.22.4
+
+- Fix when an ole is by itself (PR #162)
+
+## 2024-03-089 0.22.3
+
+- Fix how utils are exported (PR #161)
+
+## 2024-03-08 0.22.2
+
+- Fix geresh muqdam (PR #159)
+- Output cjs and esm build (PR #160)
+
+## 2024-02-28 0.22.1
+
+- Improve how poetic accents are handled (PR #157)
 
 ## 2024-02-20 0.22.0
 
