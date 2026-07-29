@@ -21,6 +21,8 @@ export abstract class TransliterationScheme {
   abstract get divineName(): DivineNameReplacement;
   abstract consonantExceptions(c: Consonant): string | undefined;
   abstract vowelExceptions(c: Vowel, txt: string): string | undefined;
+  abstract hebrewMarkExceptions(_m: HebrewMark, _txt: string): string | undefined;
+  abstract nonHebrewExceptions(_n: NonHebrew): string | undefined;
   abstract preprocess(he: string): string;
   abstract postprocess(trl: string): string;
 
@@ -106,10 +108,19 @@ export abstract class TransliterationScheme {
       throw new Error(`Unhandled vowel: ${x.text}`);
     }
     if (x instanceof HebrewMark) {
-      this.log("- + mark:", "א" + x.text);
-      return taamimOrPunct.test(x.text) ? x.text : "";
+      const txt = "א" + x.text;
+      this.log("- + mark:", txt);
+      const exn = this.hebrewMarkExceptions(x, txt);
+      if (exn !== undefined) {
+        return exn;
+      }
+      return x.text;
     }
     if (x instanceof NonHebrew) {
+      const exn = this.nonHebrewExceptions(x);
+      if (exn !== undefined) {
+        return exn;
+      }
       return x.text;
     }
     throw new Error(`Unable to handle: ${JSON.stringify(x)}`);
@@ -179,13 +190,24 @@ export class DefaultTransliterationScheme extends TransliterationScheme {
     return undefined;
   }
 
-  // params are required by the abstract signature but unused while the body is commented out
+  // params are required by the abstract signature but unused here
   /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
   vowelExceptions(_v: Vowel, _txt: string): string | undefined {
     // // Final "אָה" as "ah"
     // if (_txt === "אָה" && _v.syllable && _v.syllable.isFinal && _v.syllable.coda.length === 0) {
     //   return "ah";
     // }
+    return undefined;
+  }
+
+  hebrewMarkExceptions(m: HebrewMark, _: string): string | undefined {
+    // Only allow taamim or punctuation through
+    return taamimOrPunct.test(m.text) ? m.text : "";
+  }
+
+  // params are required by the abstract signature but unused here
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+  nonHebrewExceptions(_n: NonHebrew): string | undefined {
     return undefined;
   }
 
