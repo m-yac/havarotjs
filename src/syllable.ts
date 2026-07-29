@@ -63,6 +63,7 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
    * @remarks
    * See the [Syllabification](/guides/syllabification) page for how a syllable is determined.
    * Currently, the Divine Name (e.g. יהוה), non-Hebrew text, and Hebrew punctuation (e.g. _passeq_, _nun hafucha_) are treated as a _single syllable_ because these do not follow the rules of Hebrew syllabification.
+   * However, any prefixes on the Divine Name are still syllabified, except for a final prefix which is read with the name (e.g. לַֽיהוָ֖ה).
    */
   constructor(clusters: Cluster[], { isClosed = false, isAccented = false }: SyllableParams = {}) {
     super();

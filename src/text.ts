@@ -587,11 +587,11 @@ export class Text extends Node<Text, Word> {
   }
 
   /**
-   * Replaces the divine name (tetragrammaton) with a substitution, by default either "Adonai" or "Elohim" depending on the niqqud, respecting prefixes
+   * Replaces the Divine Name (tetragrammaton) with a substitution, by default either "Adonai" or "Elohim" depending on the niqqud, respecting prefixes
    *
    * @param repl the replacement to use, {@link adonaiOrElohim} by default (see also {@link doubleYod} and {@link hashem})
-   * @param form an optional argument for which form of the divine name to replace - all forms are replaced if not given
-   * @returns a new Text with the divine name replaced, or this Text if it was left unchanged
+   * @param form an optional argument for which form of the Divine Name to replace - all forms are replaced if not given
+   * @returns a new Text with the Divine Name replaced, or this Text if it was left unchanged
    *
    * @remarks
    * The replacement is done by each {@link Word} - see {@link Word.replaceDivineName}.

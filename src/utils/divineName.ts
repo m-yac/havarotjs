@@ -4,7 +4,7 @@ const wordBoundary = `(?:[^${hebChars.source.slice(1, -1)}]|${punctuation.source
 const taamimOrMeteg = new RegExp(`[${taamim.source.slice(1, -1)}\\u05BD]`, "u");
 
 /**
- * The form of the divine name (i.e. the tetragrammaton) that a word is
+ * The form of the Divine Name (i.e. the tetragrammaton) that a word is
  *
  * @remarks
  * A form is distinguished by whether the name has a prefix (e.g. "לַֽיהוָ֖ה"), and by whether its niqqud indicate it is read as "Elohim" (e.g. "יְהוִ֑ה") rather than "Adonai" (e.g. "יְהוָ֥ה").
@@ -15,10 +15,10 @@ export type DivineNameForm = {
 };
 
 /**
- * A replacement for the divine name, given in two cases for each of the qere forms
+ * A replacement for the Divine Name, given in two cases for each of the qere forms
  *
  * @remarks
- * For both forms, the replacement is an array of length four - with each entry being used to replace one of the four characters of the divine name.
+ * For both forms, the replacement is an array of length four - with each entry being used to replace one of the four characters of the Divine Name.
  * The first entry is a pair of strings, the second one being used when the name is prefixed and the initial yod has no niqqud, and the first to use in all other cases; The remaining three entries are strings.
  * Note that although the taamim on the original name being replaced are kept after the replacement, the niqqud are not.
  * See {@link adonaiOrElohim} for an example.
@@ -29,7 +29,7 @@ export type DivineNameReplacement = {
 };
 
 /**
- * Replaces the divine name with its qere, either "Adonai" or "Elohim" depending on the niqqud
+ * Replaces the Divine Name with its qere, either "Adonai" or "Elohim" depending on the niqqud
  *
  * @example
  * ```ts
@@ -45,7 +45,7 @@ export const adonaiOrElohim: DivineNameReplacement = {
 };
 
 /**
- * Replaces the divine name with two yods with the vowels of the qere
+ * Replaces the Divine Name with two yods with the vowels of the qere
  *
  * @example
  * ```ts
@@ -61,7 +61,7 @@ export const doubleYod: DivineNameReplacement = {
 };
 
 /**
- * Replaces the divine name with "Hashem" in all cases
+ * Replaces the Divine Name with "Hashem" in all cases
  *
  * @example
  * ```ts
@@ -76,10 +76,14 @@ export const hashem: DivineNameReplacement = {
   elohim: [["הַ", "הַ"], "שֵּׁ", "", "ם"]
 };
 
+// a prefix is one of a few set letters followed by an optional dagesh, niqqud, and taamim
+const prefix = "[בהוכלמ]\\u05BC?" + vowelsWithSheva.source + "?" + taamimOrMeteg.source + "?";
+const finalPrefix = new RegExp(`(?:${prefix})$`, "u");
+
 const cachedDivineNameRegExps: [RegExp | null, RegExp | null] = [null, null];
 
 /**
- * Creates a regular expression matching a word which is the divine name, optionally prefixed
+ * Creates a regular expression matching a word which is the Divine Name, optionally prefixed
  *
  * @param isElohim whether to match the form read as "Elohim" (i.e. the waw is pointed with a hiriq), or the form read as "Adonai"
  * @returns a regular expression with the named capture groups: `leading` for any
@@ -99,9 +103,7 @@ function divineNameRegExp(isElohim: boolean): RegExp {
   // the name must begin the word, though it may be preceded by non-Hebrew
   // characters (e.g. an opening quotation mark) and by prefixes
   let sRe = `^(?<leading>${wordBoundary}*)`;
-  // a prefix is one of a few set letters followed by an optional dagesh,
-  // niqqud, and taamim
-  sRe += "(?<prefix>(?:[בהוכלמ]\\u05BC?" + vowelsWithSheva.source + "?" + taamimOrMeteg.source + "?)+)?";
+  sRe += `(?<prefix>(?:${prefix})+)?`;
 
   // we capture the vowel under the first letter, and all taamim
   sRe += "י(?<yodNiqqud>" + vowelsWithSheva.source + ")?(?<taam1>" + taamimOrMeteg.source + ")?";
@@ -118,10 +120,10 @@ function divineNameRegExp(isElohim: boolean): RegExp {
 }
 
 /**
- * Matches a word against each form of the divine name
+ * Matches a word against each form of the Divine Name
  *
  * @param word a sequenced word (see {@link Text})
- * @returns the match and the form matched, or `null` if the word is not a form of the divine name
+ * @returns the match and the form matched, or `null` if the word is not a form of the Divine Name
  */
 function matchDivineName(word: string): { match: RegExpExecArray; form: DivineNameForm } | null {
   for (const isElohim of [false, true]) {
@@ -134,10 +136,10 @@ function matchDivineName(word: string): { match: RegExpExecArray; form: DivineNa
 }
 
 /**
- * Gets the form of the divine name (tetragrammaton) that a word is, if any
+ * Gets the form of the Divine Name (tetragrammaton) that a word is, if any
  *
  * @param word a sequenced word (see {@link Text})
- * @returns the form of the divine name the word is, or `null` if the word is not a form of the divine name
+ * @returns the form of the Divine Name the word is, or `null` if the word is not a form of the Divine Name
  *
  * @example
  * ```ts
@@ -154,12 +156,47 @@ export function divineNameForm(word: string): DivineNameForm | null {
 }
 
 /**
- * On a sequenced word (see {@link Text}), replaces the divine name (tetragrammaton) with a substitution, by default either "Adonai" or "Elohim" depending on the niqqud
+ * Gets the index in a word at which the Divine Name (tetragrammaton) is to be read as a unit
+ *
+ * @param word a sequenced word (see {@link Text})
+ * @returns the index at which the name begins, or `null` if the word is not a form of the Divine Name
+ *
+ * @remarks
+ * The name itself is read as a unit, so any prefixes precede the index returned.
+ * The exception is when the initial yod of a prefixed name has no niqqud (e.g. "לַֽיהוָ֖ה"),
+ * for the yod is then read with the final prefix - so the index of that prefix is returned.
+ *
+ * @example
+ * ```ts
+ * findDivineNameStart("וְלַֽיהוָ֖ה");
+ * // 2, the index of the lamed
+ * findDivineNameStart("וּמֵיְהוָ֖ה");
+ * // 4, the index of the yod
+ * ```
+ */
+export function findDivineNameStart(word: string): number | null {
+  const matched = matchDivineName(word);
+  if (!matched) {
+    return null;
+  }
+
+  const groups = matched.match.groups ?? {};
+  const prefix = groups.prefix ?? "";
+  const start = matched.match.index + (groups.leading?.length ?? 0) + prefix.length;
+  if (!prefix || groups.yodNiqqud) {
+    return start;
+  }
+  // the yod has no niqqud, so it is read with the final prefix
+  return start - (prefix.match(finalPrefix)?.[0].length ?? 0);
+}
+
+/**
+ * On a sequenced word (see {@link Text}), replaces the Divine Name (tetragrammaton) with a substitution, by default either "Adonai" or "Elohim" depending on the niqqud
  *
  * @param word a sequenced word
  * @param repl the replacement to use, {@link adonaiOrElohim} by default (see also {@link doubleYod} and {@link hashem})
- * @param form an optional argument for which form of the divine name to replace - any form is replaced if not given
- * @returns the word with the divine name replaced, or the word unchanged if it is not a form of the divine name (or not the given form)
+ * @param form an optional argument for which form of the Divine Name to replace - any form is replaced if not given
+ * @returns the word with the Divine Name replaced, or the word unchanged if it is not a form of the Divine Name (or not the given form)
  *
  * @remarks
  * The taamim are kept, being placed on the corresponding clusters of the replacement - see {@link DivineNameReplacement}.

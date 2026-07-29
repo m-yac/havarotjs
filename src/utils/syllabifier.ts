@@ -371,7 +371,7 @@ const groupClusters = (arr: Cluster[], options: SylOpts): Mixed => {
   return result;
 };
 
-const setIsClosed = (syllable: Syllable, index: number, arr: Syllable[]) => {
+export const setIsClosed = (syllable: Syllable, index: number, arr: Syllable[]) => {
   // no need to check, groupFinal takes care of it
   if (index === arr.length - 1) {
     return;

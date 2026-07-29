@@ -5,9 +5,9 @@ import { Syllable } from "./syllable";
 import { SylOpts, Text } from "./text";
 import type { ConsonantName, TaamimName } from "./utils/charMap";
 import type { DivineNameForm, DivineNameReplacement } from "./utils/divineName";
-import { adonaiOrElohim, divineNameForm, replaceDivineName } from "./utils/divineName";
+import { adonaiOrElohim, divineNameForm, findDivineNameStart, replaceDivineName } from "./utils/divineName";
 import { clusterSplitGroup, jerusalemTest } from "./utils/regularExpressions";
-import { syllabify } from "./utils/syllabifier";
+import { setIsClosed, syllabify } from "./utils/syllabifier";
 
 /**
  * A subunit of a {@link Text} consisting of words, which are strings are text separated by spaces or maqqefs.
@@ -116,6 +116,45 @@ export class Word extends Node<Word, Text> {
       });
     }
     return word.split(clusterSplitGroup).map((group) => new Cluster(group));
+  }
+
+  /**
+   *
+   * @param nameStart the index in the word at which the Divine Name is read as a unit (see {@link findDivineNameStart})
+   *
+   * @remarks
+   * The Divine Name does not follow the rules of Hebrew syllabification, so it is read as a single syllable,
+   * but the prefixes preceding it are syllabified as usual.
+   */
+  #divineNameSyllables(nameStart: number) {
+    const clusters = this.clusters;
+    let clusterIdx = 0;
+    for (let seenChars = 0; seenChars < nameStart; ) {
+      seenChars += clusters[clusterIdx++].text.length;
+    }
+
+    // note that `syllabify` thinks it is being applied to a full word,
+    // so we pass `true` to indicate the word is in construct form, which
+    // will stop any accent weirdness (also see below)
+    const prefixSyllables = clusterIdx ? syllabify(clusters.slice(0, clusterIdx), this.#sylOpts, true) : [];
+    const nameSyllable = new Syllable(clusters.slice(clusterIdx));
+    nameSyllable.clusters.forEach((cluster) => (cluster.parent = nameSyllable));
+
+    const syllables = [...prefixSyllables, nameSyllable];
+    const [first, ...rest] = syllables;
+    first.siblings = rest;
+
+    // another consequence of the fact that `syllabify` thought it was
+    // being applied to a full word is that a final prefix with a vocal
+    // sheva will be marked as closed, which we have to fix
+    if (clusterIdx) {
+      const finalPrefix = syllables[syllables.length - 2];
+      finalPrefix.isClosed = false;
+      setIsClosed(finalPrefix, syllables.length - 2, syllables);
+    }
+
+    syllables.forEach((syl) => (syl.parent = this));
+    return syllables;
   }
 
   /**
@@ -413,11 +452,11 @@ export class Word extends Node<Word, Text> {
   }
 
   /**
-   * Replaces the divine name (tetragrammaton) with a substitution, by default either "Adonai" or "Elohim" depending on the niqqud, respecting prefixes
+   * Replaces the Divine Name (tetragrammaton) with a substitution, by default either "Adonai" or "Elohim" depending on the niqqud, respecting prefixes
    *
    * @param repl the replacement to use, {@link adonaiOrElohim} by default (see also {@link doubleYod} and {@link hashem})
-   * @param form an optional argument for which form of the divine name to replace - any form is replaced if not given
-   * @returns a new Word with the divine name replaced, or this Word if it was left unchanged
+   * @param form an optional argument for which form of the Divine Name to replace - any form is replaced if not given
+   * @returns a new Word with the Divine Name replaced, or this Word if it was left unchanged
    *
    * @remarks
    * The taamim are kept, being placed on the corresponding clusters of the replacement - see {@link DivineNameReplacement}.
@@ -457,11 +496,18 @@ export class Word extends Node<Word, Text> {
       return this.#syllablesCache;
     }
 
-    if (/\w/.test(this.text) || this.isDivineName || this.isNotHebrew) {
+    if (/\w/.test(this.text) || this.isNotHebrew) {
       const syl = new Syllable(this.clusters);
       syl.parent = this;
       this.#syllablesCache = [syl];
       return [syl];
+    }
+
+    const divineNameStart = findDivineNameStart(this.text);
+    if (divineNameStart !== null) {
+      const syllables = this.#divineNameSyllables(divineNameStart);
+      this.#syllablesCache = syllables;
+      return syllables;
     }
 
     const syllables = syllabify(this.clusters, this.#sylOpts, this.isInConstruct);

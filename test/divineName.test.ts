@@ -66,7 +66,7 @@ describe.each`
   ${"prefixed"}                      | ${"לַֽיהוָ֖ה"}  | ${{ withPrefix: true, isElohim: false }}
   ${"prefixed, read as elohim"}      | ${"בַּיהוִ֑ה"}  | ${{ withPrefix: true, isElohim: true }}
   ${"prefixed, followed by a comma"} | ${"בַּיהוָ֔ה,"} | ${{ withPrefix: true, isElohim: false }}
-  ${"not the divine name"}           | ${"אַבְרָ֑ם"}   | ${null}
+  ${"not the Divine Name"}           | ${"אַבְרָ֑ם"}   | ${null}
 `("The Form of the Divine Name a Word Is:", ({ description, original, form }) => {
   const word = new Text(original, { allowNoNiqqud: true }).words[0];
   describe(`Form: ${description}`, () => {
@@ -102,7 +102,7 @@ describe.each`
 });
 
 describe("A Word Left Unchanged:", () => {
-  test("A word without the divine name is returned as is", () => {
+  test("A word without the Divine Name is returned as is", () => {
     const word = new Text("אַבְרָ֑ם").words[0];
     expect(word.replaceDivineName()).toBe(word);
   });
@@ -110,5 +110,21 @@ describe("A Word Left Unchanged:", () => {
   test("A word of a form which is not replaced is returned as is", () => {
     const word = new Text("בַּיהוָ֖ה").words[0];
     expect(word.replaceDivineName(adonaiOrElohim, { withPrefix: false, isElohim: false })).toBe(word);
+  });
+});
+
+describe.each`
+  description                                  | original         | syllables
+  ${"unprefixed"}                              | ${"יְהוָ֥ה"}     | ${["יְהוָ֥ה"]}
+  ${"unprefixed, read as elohim"}              | ${"יְהוִ֑ה"}     | ${["יְהוִ֑ה"]}
+  ${"prefixed, where the yod is unpointed"}    | ${"לַֽיהוָ֖ה"}   | ${["לַֽיהוָ֖ה"]}
+  ${"prefixed twice, the yod being unpointed"} | ${"וְלַֽיהוָ֖ה"} | ${["וְ", "לַֽיהוָ֖ה"]}
+  ${"prefixed twice, with a shureq"}           | ${"וּבַֽיהוָ֣ה"} | ${["וּ", "בַֽיהוָ֣ה"]}
+  ${"prefixed, where the yod is pointed"}      | ${"מֵיְהוָ֖ה"}   | ${["מֵ", "יְהוָ֖ה"]}
+  ${"prefixed twice, the yod being pointed"}   | ${"וּמֵיְהוָ֖ה"} | ${["וּ", "מֵ", "יְהוָ֖ה"]}
+`("Syllabification of the Divine Name:", ({ description, original, syllables }) => {
+  const word = new Text(original, { allowNoNiqqud: true }).words[0];
+  test(`Syllabifies the name ${description}`, () => {
+    expect(word.syllables.map((syl) => syl.text)).toEqual(syllables);
   });
 });
