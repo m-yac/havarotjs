@@ -1,17 +1,11 @@
-/* eslint-disable max-classes-per-file */
 import { Text, SylOpts } from "./text";
 import { Word } from "./word";
 import { Syllable } from "./syllable";
 import { SyllablePart, Consonant, Vowel, HebrewMark, NonHebrew } from "./syllablePart";
-import { punctuation, taamim, vowelsWithSheva } from "./utils/regularExpressions";
+import { punctuation, taamim } from "./utils/regularExpressions";
+import { adonaiOrElohim, DivineNameReplacement } from "./utils/replaceDivineName";
 
-const taamimOrMeteg = new RegExp(`[${taamim.source.slice(1, -1)}\\u05BD]`, "u");
-const taamimOrPunct = new RegExp(`[${taamimOrMeteg.source.slice(1, -1)}${punctuation.source.slice(1, -1)}]`, "u");
-
-export type DivineNameEntry = {
-  clusters: [string, string, string, string];
-  withPrefixCluster: string;
-};
+const taamimOrPunct = new RegExp(`[${taamim.source.slice(1, -1)}\\u05BD${punctuation.source.slice(1, -1)}]`, "u");
 
 export abstract class TransliterationScheme {
   debug = false;
@@ -24,7 +18,7 @@ export abstract class TransliterationScheme {
   abstract get gemination(): boolean;
   abstract get consonants(): { [fromStart: string]: string };
   abstract get vowels(): { [fromStart: string]: string };
-  abstract get divineName(): DivineNameEntry | { adonai: DivineNameEntry; elohim: DivineNameEntry };
+  abstract get divineName(): DivineNameReplacement;
   abstract consonantExceptions(c: Consonant): string | undefined;
   abstract vowelExceptions(c: Vowel, txt: string): string | undefined;
   abstract preprocess(he: string): string;
@@ -32,45 +26,8 @@ export abstract class TransliterationScheme {
 
   private log(...args: unknown[]): void {
     if (this.debug) {
-      // eslint-disable-next-line no-console
       console.log(...args);
     }
-  }
-
-  replaceDivineName(s: string, opts: { readonly hasPrefix: boolean; readonly isElohim: boolean }): string {
-    // Build the regular expression string
-    let sRe = "";
-    if (opts.hasPrefix) {
-      sRe += "([בהוכלמ]\u05BC?" + vowelsWithSheva.source + "?" + taamimOrMeteg.source + "?)";
-    }
-    sRe += "י" + (opts.hasPrefix ? "" : vowelsWithSheva.source + "?") + "(" + taamimOrMeteg.source + ")?";
-    sRe += "ה" + vowelsWithSheva.source + "?(" + taamimOrMeteg.source + ")?";
-    sRe += "ו" + (opts.isElohim ? "ִ" : "ָ?") + "(" + taamimOrMeteg.source + ")?";
-    sRe += "ה" + vowelsWithSheva.source + "?(" + taamimOrMeteg.source + ")?";
-
-    // Build the replacement string
-    const entry =
-      opts.isElohim && "elohim" in this.divineName
-        ? this.divineName.elohim
-        : "adonai" in this.divineName
-          ? this.divineName.adonai
-          : this.divineName;
-    let sRp = "";
-    let i = 1;
-    // Mark the cluster carrying the vowel to be capitalized with the
-    // capitalization marker - this differs depending on whether or not there
-    // is a prefix
-    if (opts.hasPrefix) {
-      sRp += `$${i++}` + this.capitalizationMarker;
-      sRp += entry.withPrefixCluster + `$${i++}`;
-    } else {
-      sRp += entry.clusters[0] + `$${i++}` + this.capitalizationMarker;
-    }
-    sRp += entry.clusters[1] + `$${i++}`;
-    sRp += entry.clusters[2] + `$${i++}`;
-    sRp += entry.clusters[3] + `$${i++}`;
-
-    return s.replace(new RegExp(sRe, "gu"), sRp);
   }
 
   trl(x: string | Text | Word | Syllable | SyllablePart): string {
@@ -80,21 +37,8 @@ export abstract class TransliterationScheme {
       // Do any additional preprocessing
       x = this.preprocess(x);
 
-      // Syllabify
-      let text = new Text(x, this.syllabificationOptions);
-      let textStr = text.text;
-
-      // Handle transliterating the divine name as "adonai" or "elohim"
-      textStr = this.replaceDivineName(textStr, { hasPrefix: true, isElohim: true });
-      textStr = this.replaceDivineName(textStr, { hasPrefix: true, isElohim: false });
-      textStr = this.replaceDivineName(textStr, { hasPrefix: false, isElohim: true });
-      textStr = this.replaceDivineName(textStr, { hasPrefix: false, isElohim: false });
-      // Syllabify again if this actually changed the text
-      if (textStr !== text.text) {
-        text = new Text(textStr, this.syllabificationOptions);
-      }
-
       // Transliterate
+      const text = new Text(x, this.syllabificationOptions).replaceDivineName(this.divineName);
       let trl = this.trl(text);
 
       // Capitalize the last letter preceding the capitalization marker
@@ -158,11 +102,9 @@ export abstract class TransliterationScheme {
     if (x instanceof HebrewMark) {
       this.log("- + mark:", "א" + x.text);
       return taamimOrPunct.test(x.text) ? x.text : "";
-      // throw new Error("Implement trl(HebrewMark)");
     }
     if (x instanceof NonHebrew) {
       return x.text;
-      // throw new Error("Implement trl(NonHebrew)");
     }
     throw new Error(`Unable to handle: ${JSON.stringify(x)}`);
   }
@@ -179,7 +121,6 @@ export class DefaultTransliterationScheme extends TransliterationScheme {
   };
   #syllableSeparator = "·";
   #gemination = false;
-  /* eslint-disable sort-keys */
   // prettier-ignore
   #consonants: { [fromStart: string]: string } = {
     א: "",
@@ -214,17 +155,7 @@ export class DefaultTransliterationScheme extends TransliterationScheme {
     אֳ: "o", אׇ: "o", אֹ: "o", אֹו: "o",
     אֻ: "u", אוּ: "u"
   };
-  /* eslint-enable sort-keys */
-  #divineName: { adonai: DivineNameEntry; elohim: DivineNameEntry } = {
-    adonai: {
-      clusters: ["אֲ", "דֹ", "נָ", "י"],
-      withPrefixCluster: "א"
-    },
-    elohim: {
-      clusters: ["אֱ", "לֹ", "הִ", "ים"],
-      withPrefixCluster: "א"
-    }
-  };
+  #divineName: DivineNameReplacement = adonaiOrElohim;
 
   consonantExceptions(c: Consonant): string | undefined {
     if (c.text === "י" && c.partOfCoda && c.syllable) {
@@ -285,7 +216,7 @@ export class DefaultTransliterationScheme extends TransliterationScheme {
     return this.#vowels;
   }
 
-  get divineName(): { adonai: DivineNameEntry; elohim: DivineNameEntry } {
+  get divineName(): DivineNameReplacement {
     return this.#divineName;
   }
 }
