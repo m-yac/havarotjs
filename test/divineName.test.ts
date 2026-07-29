@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { Text } from "../src/text";
-import { adonaiOrElohim, hashem } from "../src/utils/replaceDivineName";
+import { adonaiOrElohim, hashem } from "../src/utils/divineName";
 
 describe.each`
   description                                      | original                             | replaced
@@ -55,5 +55,60 @@ describe.each`
   const expected = new Text(replaced, { allowNoNiqqud: true });
   test(`Replaces ${description}`, () => {
     expect(text.replaceDivineName(adonaiOrElohim, { withPrefix, isElohim }).text).toEqual(expected.text);
+  });
+});
+
+describe.each`
+  description                        | original        | form
+  ${"unprefixed"}                    | ${"יְהוָ֥ה"}    | ${{ withPrefix: false, isElohim: false }}
+  ${"unprefixed, unpointed"}         | ${"יהוה"}       | ${{ withPrefix: false, isElohim: false }}
+  ${"unprefixed, read as elohim"}    | ${"יְהוִ֑ה"}    | ${{ withPrefix: false, isElohim: true }}
+  ${"prefixed"}                      | ${"לַֽיהוָ֖ה"}  | ${{ withPrefix: true, isElohim: false }}
+  ${"prefixed, read as elohim"}      | ${"בַּיהוִ֑ה"}  | ${{ withPrefix: true, isElohim: true }}
+  ${"prefixed, followed by a comma"} | ${"בַּיהוָ֔ה,"} | ${{ withPrefix: true, isElohim: false }}
+  ${"not the divine name"}           | ${"אַבְרָ֑ם"}   | ${null}
+`("The Form of the Divine Name a Word Is:", ({ description, original, form }) => {
+  const word = new Text(original, { allowNoNiqqud: true }).words[0];
+  describe(`Form: ${description}`, () => {
+    test("The form is identified", () => {
+      expect(word.divineNameForm).toEqual(form);
+    });
+
+    test(`hasDivineName is ${form !== null}`, () => {
+      expect(word.hasDivineName).toEqual(form !== null);
+    });
+
+    test(`isDivineName is ${form !== null && !form.withPrefix}`, () => {
+      expect(word.isDivineName).toEqual(form !== null && !form.withPrefix);
+    });
+
+    test(`isPrefixedDivineName is ${form !== null && !!form.withPrefix}`, () => {
+      expect(word.isPrefixedDivineName).toEqual(form !== null && !!form.withPrefix);
+    });
+  });
+});
+
+describe.each`
+  description                | original       | replaced
+  ${"unprefixed"}            | ${"יְהוָ֥ה"}   | ${"אֲדֹנָ֥י"}
+  ${"prefixed"}              | ${"לַֽיהוָ֖ה"} | ${"לַֽאדֹנָ֖י"}
+  ${"unprefixed, as elohim"} | ${"יְהוִ֑ה"}   | ${"אֱלֹהִ֑ים"}
+`("A Word Replaces the Divine Name:", ({ description, original, replaced }) => {
+  const word = new Text(original, { allowNoNiqqud: true }).words[0];
+  const expected = new Text(replaced, { allowNoNiqqud: true }).words[0];
+  test(`Replaces the ${description} name`, () => {
+    expect(word.replaceDivineName().text).toEqual(expected.text);
+  });
+});
+
+describe("A Word Left Unchanged:", () => {
+  test("A word without the divine name is returned as is", () => {
+    const word = new Text("אַבְרָ֑ם").words[0];
+    expect(word.replaceDivineName()).toBe(word);
+  });
+
+  test("A word of a form which is not replaced is returned as is", () => {
+    const word = new Text("בַּיהוָ֖ה").words[0];
+    expect(word.replaceDivineName(adonaiOrElohim, { withPrefix: false, isElohim: false })).toBe(word);
   });
 });

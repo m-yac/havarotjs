@@ -4,6 +4,8 @@ import type { SyllableVowelName } from "./syllable";
 import { Syllable } from "./syllable";
 import { SylOpts, Text } from "./text";
 import type { ConsonantName, TaamimName } from "./utils/charMap";
+import type { DivineNameForm, DivineNameReplacement } from "./utils/divineName";
+import { adonaiOrElohim, divineNameForm, replaceDivineName } from "./utils/divineName";
 import { clusterSplitGroup, jerusalemTest } from "./utils/regularExpressions";
 import { syllabify } from "./utils/syllabifier";
 
@@ -11,8 +13,6 @@ import { syllabify } from "./utils/syllabifier";
  * A subunit of a {@link Text} consisting of words, which are strings are text separated by spaces or maqqefs.
  */
 export class Word extends Node<Word, Text> {
-  /** A regex for removing anything that is not a character */
-  #nonCharacters = /[^\u{05D0}-\u{05F4}]/gu;
   #text: string;
   #original: string;
   /**
@@ -199,6 +199,25 @@ export class Word extends Node<Word, Text> {
   }
 
   /**
+   * Gets the form of the Divine Name (i.e the tetragrammaton) that the word is, if any
+   *
+   * @returns the {@link DivineNameForm} of the word, or `null` if the word is not a form of the Divine Name
+   *
+   * @example
+   * ```ts
+   * const text = new Text("בַּֽיהוָ֔ה");
+   * text.words[0].divineNameForm;
+   * // { withPrefix: true, isElohim: false }
+   * ```
+   *
+   * @remarks
+   * A word is a form of the Divine Name if it consists of the four characters of the name, optionally preceded by prefixes (see {@link isPrefixedDivineName}).
+   */
+  get divineNameForm(): DivineNameForm | null {
+    return divineNameForm(this.text);
+  }
+
+  /**
    * Checks if the word contains the consonant character of the name passed in
    *
    * @returns a boolean indicating if the word contains the consonant character of the name passed in
@@ -232,7 +251,7 @@ export class Word extends Node<Word, Text> {
    * ```
    */
   get hasDivineName() {
-    return /יהוה/.test(this.text.replace(this.#nonCharacters, ""));
+    return this.divineNameForm !== null;
   }
 
   /**
@@ -286,7 +305,7 @@ export class Word extends Node<Word, Text> {
   }
 
   /**
-   * Checks if the text is a form of the Divine Name (i.e the tetragrammaton)
+   * Checks if the text is a form of the Divine Name (i.e the tetragrammaton) with no prefixes
    *
    * @returns a boolean indicating if the text is a form of the Divine Name
    *
@@ -298,7 +317,7 @@ export class Word extends Node<Word, Text> {
    * ```
    */
   get isDivineName() {
-    return this.text.replace(this.#nonCharacters, "") === "יהוה";
+    return this.divineNameForm?.withPrefix === false;
   }
 
   /**
@@ -341,6 +360,25 @@ export class Word extends Node<Word, Text> {
   }
 
   /**
+   * Checks if the text is a form of the Divine Name (i.e the tetragrammaton) with at least one prefix
+   *
+   * @returns a boolean indicating if the text is a prefixed form of the Divine Name
+   *
+   * @example
+   * ```ts
+   * const text = new Text("לַֽיהוָ֖ה");
+   * text.words[0].isPrefixedDivineName;
+   * // true
+   * ```
+   *
+   * @remarks
+   * A prefix is one or more of the letters bet, he, waw, kaf, lamed, and mem, each optionally pointed, see {@link divineNameRegExp}
+   */
+  get isPrefixedDivineName() {
+    return this.divineNameForm?.withPrefix === true;
+  }
+
+  /**
    * Checks if the syllable is the final syllable in the Word
    *
    * @param syllable
@@ -372,6 +410,31 @@ export class Word extends Node<Word, Text> {
    */
   get original() {
     return this.#original.trim();
+  }
+
+  /**
+   * Replaces the divine name (tetragrammaton) with a substitution, by default either "Adonai" or "Elohim" depending on the niqqud, respecting prefixes
+   *
+   * @param repl the replacement to use, {@link adonaiOrElohim} by default (see also {@link doubleYod} and {@link hashem})
+   * @param form an optional argument for which form of the divine name to replace - any form is replaced if not given
+   * @returns a new Word with the divine name replaced, or this Word if it was left unchanged
+   *
+   * @remarks
+   * The taamim are kept, being placed on the corresponding clusters of the replacement - see {@link DivineNameReplacement}.
+   *
+   * @example
+   * ```ts
+   * const text = new Text("וַיֹּ֥אמֶר יְהוָ֖ה אֶל־אַבְרָ֑ם");
+   * text.words[1].replaceDivineName().text;
+   * // אֲדֹנָ֖י
+   * ```
+   */
+  replaceDivineName(repl: DivineNameReplacement = adonaiOrElohim, form?: DivineNameForm): Word {
+    const newText = replaceDivineName(this.#text, repl, form);
+    if (newText === this.#text) {
+      return this;
+    }
+    return new Word(newText, this.#sylOpts, this.#original);
   }
 
   /**

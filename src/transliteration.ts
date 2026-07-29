@@ -3,7 +3,7 @@ import { Word } from "./word";
 import { Syllable } from "./syllable";
 import { SyllablePart, Consonant, Vowel, HebrewMark, NonHebrew } from "./syllablePart";
 import { punctuation, taamim } from "./utils/regularExpressions";
-import { adonaiOrElohim, DivineNameReplacement } from "./utils/replaceDivineName";
+import { adonaiOrElohim, DivineNameReplacement } from "./utils/divineName";
 
 const taamimOrPunct = new RegExp(`[${taamim.source.slice(1, -1)}\\u05BD${punctuation.source.slice(1, -1)}]`, "u");
 
@@ -38,7 +38,7 @@ export abstract class TransliterationScheme {
       x = this.preprocess(x);
 
       // Transliterate
-      const text = new Text(x, this.syllabificationOptions).replaceDivineName(this.divineName);
+      const text = new Text(x, this.syllabificationOptions);
       let trl = this.trl(text);
 
       // Capitalize the last letter preceding the capitalization marker
@@ -56,7 +56,10 @@ export abstract class TransliterationScheme {
     }
     if (x instanceof Word) {
       this.log("Word:", x.text);
-      return x.syllables.map((s) => this.trl(s)).join(this.syllableSeparator);
+      return x
+        .replaceDivineName(this.divineName)
+        .syllables.map((s) => this.trl(s))
+        .join(this.syllableSeparator);
     }
     if (x instanceof Syllable) {
       this.log("- syllable:", x.text);

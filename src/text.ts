@@ -2,7 +2,7 @@ import { Node } from "./node";
 import { holemWaw } from "./utils/holemWaw";
 import { convertsQametsQatan } from "./utils/qametsQatan";
 import { splitGroup, taamim, taamimCaptureGroup } from "./utils/regularExpressions";
-import { adonaiOrElohim, DivineNameReplacement, replaceDivineName } from "./utils/replaceDivineName";
+import { adonaiOrElohim, DivineNameForm, DivineNameReplacement } from "./utils/divineName";
 import { sequence } from "./utils/sequence";
 import { Word } from "./word";
 
@@ -587,13 +587,14 @@ export class Text extends Node<Text, Word> {
   }
 
   /**
-   * Replaces the divine name (tetragrammaton) with a substitution, by default either "Adonai" or "Elohim" depending on the niqqud
+   * Replaces the divine name (tetragrammaton) with a substitution, by default either "Adonai" or "Elohim" depending on the niqqud, respecting prefixes
    *
    * @param repl the replacement to use, {@link adonaiOrElohim} by default (see also {@link doubleYod} and {@link hashem})
-   * @param opts an optional argument for which form of the divine name to replace - all forms are replaced if not given
+   * @param form an optional argument for which form of the divine name to replace - all forms are replaced if not given
    * @returns a new Text with the divine name replaced, or this Text if it was left unchanged
    *
    * @remarks
+   * The replacement is done by each {@link Word} - see {@link Word.replaceDivineName}.
    * The taamim are kept, being placed on the corresponding clusters of the replacement - see {@link DivineNameReplacement}.
    *
    * @example
@@ -604,12 +605,12 @@ export class Text extends Node<Text, Word> {
    * // וַיֹּ֥אמֶר אֲדֹנָ֖י אֶל־אַבְרָ֑ם
    * ```
    */
-  replaceDivineName(
-    repl: DivineNameReplacement = adonaiOrElohim,
-    opts?: { readonly withPrefix: boolean; readonly isElohim: boolean }
-  ): Text {
-    const newText = replaceDivineName(this.text, repl, opts);
-    if (newText == this.text) {
+  replaceDivineName(repl: DivineNameReplacement = adonaiOrElohim, form?: DivineNameForm): Text {
+    const newText = this.words.reduce(
+      (a, c) => `${a}${c.replaceDivineName(repl, form).text}${c.whiteSpaceAfter ?? ""}`,
+      ""
+    );
+    if (newText === this.text) {
       return this;
     }
     return new Text(newText, this.#options);
