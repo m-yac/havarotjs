@@ -56,13 +56,16 @@ export abstract class TransliterationScheme {
     }
     if (x instanceof Word) {
       this.log("Word:", x.text);
-      return x
-        .replaceDivineName(this.divineName)
-        .syllables.map((s) => this.trl(s))
-        .join(this.syllableSeparator);
+      return x.syllables.map((s) => this.trl(s)).join(this.syllableSeparator);
     }
     if (x instanceof Syllable) {
       this.log("- syllable:", x.text);
+      if (x.hasDivineName) {
+        return x
+          .replaceDivineName(this.divineName)
+          .map((s) => this.trl(s))
+          .join(this.syllableSeparator);
+      }
       return x.parts.map((p) => this.trl(p)).join("");
     }
     if (x instanceof Consonant) {

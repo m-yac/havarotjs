@@ -5,7 +5,7 @@ import { Syllable } from "./syllable";
 import { SylOpts, Text } from "./text";
 import type { ConsonantName, TaamimName } from "./utils/charMap";
 import type { DivineNameForm, DivineNameReplacement } from "./utils/divineName";
-import { adonaiOrElohim, divineNameForm, findDivineNameStart, replaceDivineName } from "./utils/divineName";
+import { adonaiOrElohim, divineNameForm, divineNameSyllableStart } from "./utils/divineName";
 import { clusterSplitGroup, jerusalemTest } from "./utils/regularExpressions";
 import { setIsClosed, syllabify } from "./utils/syllabifier";
 
@@ -120,16 +120,16 @@ export class Word extends Node<Word, Text> {
 
   /**
    *
-   * @param nameStart the index in the word at which the Divine Name is read as a unit (see {@link findDivineNameStart})
+   * @param nameSyllableStart the index in the word at which the syllable read as the Divine Name begins (see {@link divineNameSyllableStart})
    *
    * @remarks
    * The Divine Name does not follow the rules of Hebrew syllabification, so it is read as a single syllable,
    * but the prefixes preceding it are syllabified as usual.
    */
-  #divineNameSyllables(nameStart: number) {
+  #divineNameSyllables(nameSyllableStart: number) {
     const clusters = this.clusters;
     let clusterIdx = 0;
-    for (let seenChars = 0; seenChars < nameStart; ) {
+    for (let seenChars = 0; seenChars < nameSyllableStart; ) {
       seenChars += clusters[clusterIdx++].text.length;
     }
 
@@ -469,11 +469,31 @@ export class Word extends Node<Word, Text> {
    * ```
    */
   replaceDivineName(repl: DivineNameReplacement = adonaiOrElohim, form?: DivineNameForm): Word {
-    const newText = replaceDivineName(this.#text, repl, form);
+    if (
+      !this.divineNameForm ||
+      (form && (form.withPrefix !== this.divineNameForm.withPrefix || form.isElohim !== this.divineNameForm.isElohim))
+    ) {
+      return this;
+    }
+
+    const replaced = this.syllables
+      .flatMap((syl) => syl.replaceDivineName(repl))
+      .map((syl) => syl.text)
+      .join("");
+    const newText = `${this.whiteSpaceBefore ?? ""}${replaced}${this.whiteSpaceAfter ?? ""}`;
     if (newText === this.#text) {
       return this;
     }
     return new Word(newText, this.#sylOpts, this.#original);
+  }
+
+  /**
+   * The syllabification options of the Word
+   *
+   * @returns the {@link SylOpts} passed to the constructor, i.e. those of the {@link Text} the Word belongs to
+   */
+  get sylOpts(): SylOpts {
+    return this.#sylOpts;
   }
 
   /**
@@ -503,9 +523,9 @@ export class Word extends Node<Word, Text> {
       return [syl];
     }
 
-    const divineNameStart = findDivineNameStart(this.text);
-    if (divineNameStart !== null) {
-      const syllables = this.#divineNameSyllables(divineNameStart);
+    const nameSyllableStart = divineNameSyllableStart(this.text);
+    if (nameSyllableStart !== null) {
+      const syllables = this.#divineNameSyllables(nameSyllableStart);
       this.#syllablesCache = syllables;
       return syllables;
     }

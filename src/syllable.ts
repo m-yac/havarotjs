@@ -3,6 +3,8 @@ import { Node } from "./node";
 import { Consonant, ConsonantType, HebrewMark, NonHebrew, SyllablePart, Vowel } from "./syllablePart";
 import type { ConsonantName, Flip, TaamimName } from "./utils/charMap";
 import { consonantNameToCharMap, taamimNameToCharMap, vowelCharToNameMap, vowelNameToCharMap } from "./utils/charMap";
+import type { DivineNameReplacement } from "./utils/divineName";
+import { adonaiOrElohim, divineNameForm, replaceDivineName } from "./utils/divineName";
 import { hebChars } from "./utils/regularExpressions";
 import { Word } from "./word";
 
@@ -277,6 +279,27 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
       throw new Error(`${name} is not a valid value`);
     }
     return this.taamimNames.includes(name);
+  }
+
+  /**
+   * Checks if the Syllable is a form of the Divine Name (i.e the tetragrammaton), that is, if it is read as the Divine Name
+   *
+   * @returns a boolean indicating if the Syllable is a form of the Divine Name
+   *
+   * @example
+   * ```ts
+   * const text = new Text("וְלַֽיהוָ֖ה");
+   * text.syllables.map((syl) => syl.hasDivineName);
+   * // [false, true], i.e. only "לַֽיהוָ֖ה"
+   * ```
+   *
+   * @remarks
+   * The Divine Name does not follow the rules of Hebrew syllabification, so it is read as a single syllable -
+   * either alone (e.g. "יְהוָ֥ה") or together with the single prefix it is read with (e.g. "לַֽיהוָ֖ה"), the
+   * remaining prefixes being syllabified as usual.
+   */
+  get hasDivineName() {
+    return divineNameForm(this.text) !== null;
   }
 
   /**
@@ -662,6 +685,30 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
    */
   get parts(): SyllablePart[] {
     return this.#resolveParts().parts;
+  }
+
+  /**
+   * Returns the new syllables resulting from replacing the Divine Name (tetragrammaton) with a substitution, by default either "Adonai" or "Elohim" depending on the niqqud
+   *
+   * @param repl the replacement to use, {@link adonaiOrElohim} by default (see also {@link doubleYod} and {@link hashem})
+   * @returns the Syllables of the replacement, or just this Syllable if it is not read as the Divine Name (see {@link hasDivineName})
+   *
+   * @example
+   * ```ts
+   * const text = new Text("לַֽיהוָ֖ה");
+   * text.syllables[0].replaceDivineName().map((syl) => syl.text);
+   * // ["לַֽא", "דֹ", "נָ֖י"]
+   * ```
+   *
+   * @remarks
+   * Any prefix the Syllable is read with is kept, and the taamim are kept, being placed on the corresponding clusters of the replacement - see {@link DivineNameReplacement}.
+   */
+  replaceDivineName(repl: DivineNameReplacement = adonaiOrElohim): Syllable[] {
+    const newText = replaceDivineName(this.text, repl);
+    if (newText === this.text) {
+      return [this];
+    }
+    return new Word(newText, this.word?.sylOpts ?? {}).syllables;
   }
 
   /**

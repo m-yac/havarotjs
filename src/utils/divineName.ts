@@ -156,25 +156,23 @@ export function divineNameForm(word: string): DivineNameForm | null {
 }
 
 /**
- * Gets the index in a word at which the Divine Name (tetragrammaton) is to be read as a unit
+ * Gets the index in a word at which the syllable read as the Divine Name (tetragrammaton) begins
  *
  * @param word a sequenced word (see {@link Text})
- * @returns the index at which the name begins, or `null` if the word is not a form of the Divine Name
+ * @returns the index at which that syllable begins, or `null` if the word is not a form of the Divine Name
  *
  * @remarks
- * The name itself is read as a unit, so any prefixes precede the index returned.
- * The exception is when the initial yod of a prefixed name has no niqqud (e.g. "לַֽיהוָ֖ה"),
- * for the yod is then read with the final prefix - so the index of that prefix is returned.
+ * Note that when the initial yod of a prefixed name has no niqqud (e.g. "לַֽיהוָ֖ה"), the yod is then read with the final prefix - so the index of that prefix is returned.
  *
  * @example
  * ```ts
- * findDivineNameStart("וְלַֽיהוָ֖ה");
+ * divineNameSyllableStart("וְלַֽיהוָ֖ה");
  * // 2, the index of the lamed
- * findDivineNameStart("וּמֵיְהוָ֖ה");
+ * divineNameSyllableStart("וּמֵיְהוָ֖ה");
  * // 4, the index of the yod
  * ```
  */
-export function findDivineNameStart(word: string): number | null {
+export function divineNameSyllableStart(word: string): number | null {
   const matched = matchDivineName(word);
   if (!matched) {
     return null;
@@ -191,42 +189,34 @@ export function findDivineNameStart(word: string): number | null {
 }
 
 /**
- * On a sequenced word (see {@link Text}), replaces the Divine Name (tetragrammaton) with a substitution, by default either "Adonai" or "Elohim" depending on the niqqud
+ * On a syllable read as the Divine Name (tetragrammaton), replaces the name with a substitution, by default either "Adonai" or "Elohim" depending on the niqqud
  *
- * @param word a sequenced word
+ * @param syllable the text of a syllable of a sequenced word (see {@link Text}) which is read as the Divine Name
  * @param repl the replacement to use, {@link adonaiOrElohim} by default (see also {@link doubleYod} and {@link hashem})
- * @param form an optional argument for which form of the Divine Name to replace - any form is replaced if not given
- * @returns the word with the Divine Name replaced, or the word unchanged if it is not a form of the Divine Name (or not the given form)
+ * @returns the syllable with the Divine Name replaced, or the syllable unchanged if it is not read as the Divine Name
  *
  * @remarks
+ * The name is read as a unit (see {@link divineNameSyllableStart}), so such a syllable is either the name alone (e.g. "יְהוָ֥ה") or the name preceded by the single prefix it is read with (e.g. "לַֽיהוָ֖ה") - and in the latter case the initial yod is always unpointed.
  * The taamim are kept, being placed on the corresponding clusters of the replacement - see {@link DivineNameReplacement}.
  */
-export function replaceDivineName(
-  word: string,
-  repl: DivineNameReplacement = adonaiOrElohim,
-  form?: DivineNameForm
-): string {
-  const matched = matchDivineName(word);
+export function replaceDivineName(syllable: string, repl: DivineNameReplacement = adonaiOrElohim): string {
+  const matched = matchDivineName(syllable);
   if (!matched) {
-    return word;
+    return syllable;
   }
 
-  const { match, form: matchedForm } = matched;
-  if (form && (form.withPrefix !== matchedForm.withPrefix || form.isElohim !== matchedForm.isElohim)) {
-    return word;
-  }
-
+  const { match, form } = matched;
   const groups = match.groups ?? {};
-  const entry = matchedForm.isElohim ? repl.elohim : repl.adonai;
-  // when the name is prefixed and the initial yod has no niqqud, the second string
-  // of the first entry is used - e.g. "לַֽיהוָ֖ה" becomes "לַֽאדֹנָ֖י", not "לַֽאֲדֹנָ֖י"
-  const prefixedFormIdx = matchedForm.withPrefix && !groups.yodNiqqud ? 1 : 0;
-  let r = entry[0][prefixedFormIdx] + (groups.taam1 ?? "");
+  const entry = form.isElohim ? repl.elohim : repl.adonai;
+  // when the syllable is prefixed, the initial yod has no niqqud, so the
+  // second string of the first entry is used - e.g. "לַֽיהוָ֖ה" becomes
+  // "לַֽאדֹנָ֖י", not "לַֽאֲדֹנָ֖י"
+  let r = entry[0][form.withPrefix ? 1 : 0] + (groups.taam1 ?? "");
   r += entry[1] + (groups.taam2 ?? "");
   r += entry[2] + (groups.taam3 ?? "");
   r += entry[3] + (groups.taam4 ?? "");
 
   const start = match.index + (groups.leading?.length ?? 0) + (groups.prefix?.length ?? 0);
   const end = match.index + match[0].length;
-  return word.slice(0, start) + r + word.slice(end);
+  return syllable.slice(0, start) + r + syllable.slice(end);
 }
