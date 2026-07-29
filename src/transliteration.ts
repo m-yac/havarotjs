@@ -18,6 +18,8 @@ export abstract class TransliterationScheme {
   abstract get gemination(): boolean;
   abstract get consonants(): { [fromStart: string]: string };
   abstract get vowels(): { [fromStart: string]: string };
+  abstract get hebrewMarks(): { [fromStart: string]: string };
+  abstract get nonHebrew(): { [fromStart: string]: string };
   abstract get divineName(): DivineNameReplacement;
   abstract consonantExceptions(c: Consonant): string | undefined;
   abstract vowelExceptions(c: Vowel, txt: string): string | undefined;
@@ -114,12 +116,25 @@ export abstract class TransliterationScheme {
       if (exn !== undefined) {
         return exn;
       }
+      for (let n = txt.length; n > 0; n--) {
+        const s = this.hebrewMarks[txt.slice(0, n)];
+        if (s !== undefined) {
+          return s;
+        }
+      }
       return x.text;
     }
     if (x instanceof NonHebrew) {
       const exn = this.nonHebrewExceptions(x);
       if (exn !== undefined) {
         return exn;
+      }
+      const txt = x.text;
+      for (let n = txt.length; n > 0; n--) {
+        const s = this.nonHebrew[txt.slice(0, n)];
+        if (s !== undefined) {
+          return s;
+        }
       }
       return x.text;
     }
@@ -172,6 +187,9 @@ export class DefaultTransliterationScheme extends TransliterationScheme {
     אֳ: "o", אׇ: "o", אֹ: "o", אֹו: "o",
     אֻ: "u", אוּ: "u"
   };
+  // prettier-ignore
+  #hebrewMarks: { [fromStart: string]: string } = {}
+  #nonHebrew: { [fromStart: string]: string } = {};
   #divineName: DivineNameReplacement = adonaiOrElohim;
 
   consonantExceptions(c: Consonant): string | undefined {
@@ -190,7 +208,6 @@ export class DefaultTransliterationScheme extends TransliterationScheme {
     return undefined;
   }
 
-  // params are required by the abstract signature but unused here
   /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
   vowelExceptions(_v: Vowel, _txt: string): string | undefined {
     // // Final "אָה" as "ah"
@@ -200,12 +217,15 @@ export class DefaultTransliterationScheme extends TransliterationScheme {
     return undefined;
   }
 
-  hebrewMarkExceptions(m: HebrewMark, _: string): string | undefined {
-    // Only allow taamim or punctuation through
-    return taamimOrPunct.test(m.text) ? m.text : "";
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+  hebrewMarkExceptions(m: HebrewMark, _txt: string): string | undefined {
+    // Delete anything that's not taamim or punctuation
+    if (!taamimOrPunct.test(m.text)) {
+      return "";
+    }
+    return undefined
   }
 
-  // params are required by the abstract signature but unused here
   /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
   nonHebrewExceptions(_n: NonHebrew): string | undefined {
     return undefined;
@@ -242,6 +262,14 @@ export class DefaultTransliterationScheme extends TransliterationScheme {
 
   get vowels(): { [fromStart: string]: string } {
     return this.#vowels;
+  }
+
+  get hebrewMarks(): { [fromStart: string]: string } {
+    return this.#hebrewMarks;
+  }
+
+  get nonHebrew(): { [fromStart: string]: string } {
+    return this.#nonHebrew;
   }
 
   get divineName(): DivineNameReplacement {
