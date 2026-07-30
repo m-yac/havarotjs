@@ -203,7 +203,6 @@ export class DefaultTransliterationScheme extends TransliterationScheme {
       if (nucleus.length > 0 && this.trl(nucleus.slice(-1)[0]) === "a") {
         return "i";
       }
-      return "";
     }
     return undefined;
   }
