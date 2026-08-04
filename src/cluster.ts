@@ -94,6 +94,9 @@ export class Cluster extends Node<Cluster, Char, Syllable> {
   get chars() {
     return this.#sequenced;
   }
+  get children() {
+    return this.chars;
+  }
 
   /**
    * Gets all the consonant characters in the cluster

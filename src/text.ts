@@ -739,12 +739,17 @@ export class Text extends Node<Text, Word> {
     const split = this.#sanitized.split(splitGroup);
     const groups = split.filter((group) => group);
     const words = groups.map((original) => {
-      const word = this.#processKetivQeres(original);
-      return new Word(word, this.#options, word !== original ? original : undefined);
+      const text = this.#processKetivQeres(original);
+      const word = new Word(text, this.#options, text !== original ? original : undefined);
+      word.parent = this;
+      return word;
     });
     const [first, ...rest] = words;
     first.siblings = rest;
 
     return words;
+  }
+  get children() {
+    return this.words;
   }
 }

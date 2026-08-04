@@ -12,7 +12,7 @@ import { setIsClosed, syllabify } from "./utils/syllabifier";
 /**
  * A subunit of a {@link Text} consisting of words, which are strings are text separated by spaces or maqqefs.
  */
-export class Word extends Node<Word, Text> {
+export class Word extends Node<Word, Syllable, Text> {
   #text: string;
   #original: string;
   /**
@@ -538,6 +538,9 @@ export class Word extends Node<Word, Text> {
 
     this.#syllablesCache = syllables;
     return syllables;
+  }
+  get children() {
+    return this.syllables;
   }
 
   /**

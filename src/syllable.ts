@@ -117,6 +117,9 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
   get clusters() {
     return this.#clusters;
   }
+  get children() {
+    return this.clusters;
+  }
 
   /**
    * Gets the coda of the syllable, including gemination of the following syllable - see {@link structure}

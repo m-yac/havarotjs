@@ -13,8 +13,10 @@ export class Node<Self extends Node<Self, Child, Parent>, Child = never, Parent 
   prev: Self | null = null;
   /** Reference to the parent container. */
   parent: Parent | null = null;
-  /** Collection of child nodes. */
-  children: Child[] | null = null;
+  /** Get the collection of child nodes. */
+  get children(): Child[] {
+    return [];
+  }
 
   constructor() {}
 
