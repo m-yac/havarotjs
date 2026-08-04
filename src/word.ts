@@ -424,8 +424,10 @@ export class Word extends Node<Word, Text> {
    * @returns a boolean indicating if the syllable is the final syllable in the Word
    */
   isSyllableFinal(syllable: Syllable) {
-    const index = this.syllablePosition(syllable);
-    return index === this.syllables.length - 1;
+    if (this.syllables.some((syl) => syl === syllable)) {
+      return syllable.isFinal;
+    }
+    throw new Error("Syllable not found in word");
   }
 
   /**
@@ -435,8 +437,10 @@ export class Word extends Node<Word, Text> {
    * @returns a boolean indicating if the syllable is the initial syllable in the Word
    */
   isSyllableInitial(syllable: Syllable) {
-    const index = this.syllablePosition(syllable);
-    return index === 0;
+    if (this.syllables.some((syl) => syl === syllable)) {
+      return syllable.isInitial;
+    }
+    throw new Error("Syllable not found in word");
   }
 
   /**
@@ -544,11 +548,13 @@ export class Word extends Node<Word, Text> {
    * @returns the position of the syllable within the Word (0-based index)
    */
   syllablePosition(syllable: Syllable) {
-    const index = this.syllables.findIndex((syl) => syl === syllable);
-    if (index === -1) {
-      throw new Error("Syllable not found in word");
+    if (this.syllables.some((syl) => syl === syllable)) {
+      const index = syllable.position;
+      if (index !== -1) {
+        return index;
+      }
     }
-    return index;
+    throw new Error("Syllable not found in word");
   }
 
   /**
