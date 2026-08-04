@@ -919,4 +919,59 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
   get word() {
     return this.parent?.value ?? null;
   }
+
+  /**
+   * Applies a {@link SyllableMap} to this {@link Syllable} by folding {@link SyllableMap.onSyllablePart} over this syllable's {@link parts}
+   *
+   * @param map the {@link SyllableMap} to fold
+   *
+   * @returns the accumulated value
+   *
+   * @remarks
+   * If `map.divineName` is given and this syllable {@link hasDivineName}, the syllable is first expanded via {@link replaceDivineName} and {@link SyllableMap.onSyllable} is folded over the resulting syllables instead
+   */
+  apply<T>(map: SyllableMap<T>): T {
+    if (this.hasDivineName && map.divineName) {
+      const syls = this.replaceDivineName(map.divineName);
+      if (syls.length == 0) {
+        return map.onSyllable();
+      }
+      return syls.slice(1).reduce<T>(map.onSyllable, map.onSyllable(undefined, syls[0]));
+    }
+    if (this.parts.length == 0) {
+      return map.onSyllablePart();
+    }
+    return this.parts.slice(1).reduce<T>(map.onSyllablePart, map.onSyllablePart(undefined, this.parts[0]));
+  }
+}
+
+/**
+ * A fold of the {@link SyllablePart | SyllableParts} of some number of {@link Syllable | Syllables} into a value of type `T`
+ *
+ * @example
+ * ```ts
+ * const map: SyllableMap<string> = {
+ *   onSyllablePart: (acc, p) => (acc ?? "") + (p?.text ?? ""),
+ *   onSyllable: (acc, s) => (acc ? (acc + "|") : "") + (s?.apply(map) ?? "")
+ * };
+ * new Text("וּמַדּ֖וּעַ").words[0].apply(map);
+ * // "וּ|מַדּ|דּ֖וּ|ַע"
+ * ```
+ */
+export interface SyllableMap<T> {
+  /**
+   * The function folded over the {@link Syllable.parts | parts} of a {@link Syllable}, where `acc` is undefined on the call for the first part, and both arguments are undefined when the syllable has no parts at all
+   */
+  onSyllablePart: (acc?: T, p?: SyllablePart) => T;
+  /**
+   * The function folded over multiple {@link Syllable | Syllables} - either from {@link Word.syllables | syllables} or the result of {@link replaceDivineName} - where `acc` is undefined on the call for the first syllable, and both arguments are undefined when there are no syllables at all
+   * 
+   * @remark
+   * Note that {@link divineName} will only have a chance to be applied on `p` if the implementation of this function calls {@link Syllable.apply}
+   */
+  onSyllable: (acc?: T, p?: Syllable) => T;
+  /**
+   * If given, call {@link replaceDivineName} before mapping - but only on all syllables for which the implementation of {@link onSyllable} calls {@link Syllable.apply}
+   */
+  divineName?: DivineNameReplacement;
 }

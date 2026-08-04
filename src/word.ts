@@ -1,6 +1,6 @@
 import { Cluster } from "./cluster";
 import { Node } from "./node";
-import type { SyllableVowelName } from "./syllable";
+import type { SyllableMap, SyllableVowelName } from "./syllable";
 import { Syllable } from "./syllable";
 import { SylOpts, Text } from "./text";
 import type { ConsonantName, TaamimName } from "./utils/charMap";
@@ -640,5 +640,19 @@ export class Word extends Node<Word, Text> {
    */
   get vowels() {
     return this.syllables.map((syl) => syl.vowels).flat();
+  }
+
+  /**
+   * Applies a {@link SyllableMap} to this {@link Word} by folding {@link SyllableMap.onSyllable} over this word's {@link syllables}
+   *
+   * @param map the {@link SyllableMap} to apply
+   *
+   * @returns the accumulated value
+   */
+  apply<T>(map: SyllableMap<T>): T {
+    if (this.syllables.length == 0) {
+      return map.onSyllable();
+    }
+    return this.syllables.slice(1).reduce<T>(map.onSyllable, map.onSyllable(undefined, this.syllables[0]));
   }
 }

@@ -1,13 +1,17 @@
 import { Text, SylOpts } from "./text";
 import { Word } from "./word";
-import { Syllable } from "./syllable";
+import { Syllable, SyllableMap } from "./syllable";
 import { Consonant, SyllablePart, SyllablePartMap } from "./syllablePart";
 import { punctuation, taamim } from "./utils/regularExpressions";
 import { adonaiOrElohim, DivineNameReplacement } from "./utils/divineName";
 
 const taamimOrPunct = new RegExp(`[${taamim.source.slice(1, -1)}\\u05BD${punctuation.source.slice(1, -1)}]`, "u");
 
+export type TransliterationMap = SyllableMap<string> & SyllablePartMap<string>;
+
 export abstract class TransliterationScheme {
+  #syllableMap?: TransliterationMap;
+
   debug = false;
   // U+034F COMBINING GRAPHEME JOINER is invisible, does not get reordered by
   // normalization, and is otherwise unused - so we use it as our internal marker for
@@ -19,6 +23,22 @@ export abstract class TransliterationScheme {
   abstract get divineName(): DivineNameReplacement;
   abstract preprocess(he: string): string;
   abstract postprocess(trl: string): string;
+
+  /**
+   * The scheme's {@link syllablePartMap} extended into a {@link TransliterationMap} by
+   * concatenating the transliterations of a syllable's parts, and joining those of a
+   * word's syllables with the {@link syllableSeparator}
+   */
+  get syllableMap(): TransliterationMap {
+    this.#syllableMap ??= {
+      ...this.syllablePartMap,
+      onSyllablePart: (acc, p) => (acc ?? "") + (p !== undefined ? this.trl(p) : ""),
+      onSyllable: (acc, s) =>
+        (acc !== undefined ? acc + this.syllableSeparator : "") + (s !== undefined ? this.trl(s) : ""),
+      divineName: this.divineName
+    };
+    return this.#syllableMap;
+  }
 
   private log(...args: unknown[]): void {
     if (this.debug) {
@@ -52,21 +72,15 @@ export abstract class TransliterationScheme {
     }
     if (x instanceof Word) {
       this.log("Word:", x.text);
-      return x.syllables.map((s) => this.trl(s)).join(this.syllableSeparator);
+      return x.apply(this.syllableMap);
     }
     if (x instanceof Syllable) {
       this.log("- syllable:", x.text);
-      if (x.hasDivineName) {
-        return x
-          .replaceDivineName(this.divineName)
-          .map((s) => this.trl(s))
-          .join(this.syllableSeparator);
-      }
-      return x.parts.map((p) => this.trl(p)).join("");
+      return x.apply(this.syllableMap);
     }
     if (x instanceof SyllablePart) {
       this.log(`- + ${x.kind}:`, x.text);
-      return x.apply(this.syllablePartMap);
+      return x.apply(this.syllableMap);
     }
     throw new Error(`Unable to handle: ${JSON.stringify(x)}`);
   }
