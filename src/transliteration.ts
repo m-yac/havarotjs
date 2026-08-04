@@ -1,7 +1,7 @@
 import { Text, SylOpts } from "./text";
 import { Word } from "./word";
 import { Syllable } from "./syllable";
-import { SyllablePart, Consonant, Vowel, HebrewMark, NonHebrew } from "./syllablePart";
+import { Consonant, SyllablePart, SyllablePartMap } from "./syllablePart";
 import { punctuation, taamim } from "./utils/regularExpressions";
 import { adonaiOrElohim, DivineNameReplacement } from "./utils/divineName";
 
@@ -15,16 +15,8 @@ export abstract class TransliterationScheme {
   capitalizationMarker: string = "\u034F";
   abstract get syllabificationOptions(): SylOpts;
   abstract get syllableSeparator(): string;
-  abstract get gemination(): boolean;
-  abstract get consonants(): { [fromStart: string]: string };
-  abstract get vowels(): { [fromStart: string]: string };
-  abstract get hebrewMarks(): { [fromStart: string]: string };
-  abstract get nonHebrew(): { [fromStart: string]: string };
+  abstract get syllablePartMap(): SyllablePartMap<string>;
   abstract get divineName(): DivineNameReplacement;
-  abstract consonantExceptions(c: Consonant): string | undefined;
-  abstract vowelExceptions(c: Vowel, txt: string): string | undefined;
-  abstract hebrewMarkExceptions(_m: HebrewMark, _txt: string): string | undefined;
-  abstract nonHebrewExceptions(_n: NonHebrew): string | undefined;
   abstract preprocess(he: string): string;
   abstract postprocess(trl: string): string;
 
@@ -72,71 +64,9 @@ export abstract class TransliterationScheme {
       }
       return x.parts.map((p) => this.trl(p)).join("");
     }
-    if (x instanceof Consonant) {
-      this.log("- + consonant:", x.text);
-      if (x.fromGemination && !this.gemination) {
-        return "";
-      }
-      const exn = this.consonantExceptions(x);
-      if (exn !== undefined) {
-        return exn;
-      }
-      const txt = x.text;
-      for (let n = txt.length; n > 0; n--) {
-        const s = this.consonants[txt.slice(0, n)];
-        if (s !== undefined) {
-          return s;
-        }
-      }
-      throw new Error(`Unhandled consonant: ${x.text}`);
-    }
-    if (x instanceof Vowel) {
-      const txt = "א" + x.text;
-      this.log("- + vowel:", txt);
-      const exn = this.vowelExceptions(x, txt);
-      if (exn !== undefined) {
-        return exn;
-      }
-      const txtNoHolemHaserVav = txt.replaceAll("\u05BA", "\u05B9");
-      const txts = txt === txtNoHolemHaserVav ? [txt] : [txt, txtNoHolemHaserVav];
-      for (const t of txts) {
-        for (let n = t.length; n > 1; n--) {
-          const s = this.vowels[t.slice(0, n)];
-          if (s !== undefined) {
-            return s;
-          }
-        }
-      }
-      throw new Error(`Unhandled vowel: ${x.text}`);
-    }
-    if (x instanceof HebrewMark) {
-      const txt = "א" + x.text;
-      this.log("- + mark:", txt);
-      const exn = this.hebrewMarkExceptions(x, txt);
-      if (exn !== undefined) {
-        return exn;
-      }
-      for (let n = txt.length; n > 0; n--) {
-        const s = this.hebrewMarks[txt.slice(0, n)];
-        if (s !== undefined) {
-          return s;
-        }
-      }
-      return x.text;
-    }
-    if (x instanceof NonHebrew) {
-      const exn = this.nonHebrewExceptions(x);
-      if (exn !== undefined) {
-        return exn;
-      }
-      const txt = x.text;
-      for (let n = txt.length; n > 0; n--) {
-        const s = this.nonHebrew[txt.slice(0, n)];
-        if (s !== undefined) {
-          return s;
-        }
-      }
-      return x.text;
+    if (x instanceof SyllablePart) {
+      this.log(`- + ${x.kind}:`, x.text);
+      return x.apply(this.syllablePartMap);
     }
     throw new Error(`Unable to handle: ${JSON.stringify(x)}`);
   }
@@ -152,47 +82,61 @@ export class DefaultTransliterationScheme extends TransliterationScheme {
     wawShureq: false
   };
   #syllableSeparator = "·";
-  #gemination = false;
   // prettier-ignore
-  #consonants: { [fromStart: string]: string } = {
-    א: "",
-    בּ: "b", ב: "v",
-    ג: "g",
-    ד: "d",
-    ה: "h",
-    ו: "v",
-    ז: "z",
-    ח: "ch",
-    ט: "t",
-    י: "y",
-    כּ: "k", ךּ: "k", כ: "ch", ך: "ch",
-    ל: "l",
-    מ: "m", ם: "m",
-    נ: "n", ן: "n",
-    ס: "s",
-    ע: "",
-    פּ: "p", ףּ: "p", פ: "f", ף: "f",
-    צ: "tz", ץ: "tz",
-    ק: "k",
-    ר: "r",
-    ש: "sh", שׁ: "sh", שׂ: "s",
-    ת: "t"
+  #syllablePartMap: SyllablePartMap<string> = {
+    onConsonant: {
+      א: "",
+      בּ: "b", ב: "v",
+      ג: "g",
+      ד: "d",
+      ה: "h",
+      ו: "v",
+      ז: "z",
+      ח: "ch",
+      ט: "t",
+      י: (c) => this.yod(c),
+      כּ: "k", ךּ: "k", כ: "ch", ך: "ch",
+      ל: "l",
+      מ: "m", ם: "m",
+      נ: "n", ן: "n",
+      ס: "s",
+      ע: "",
+      פּ: "p", ףּ: "p", פ: "f", ף: "f",
+      צ: "tz", ץ: "tz",
+      ק: "k",
+      ר: "r",
+      ש: "sh", שׁ: "sh", שׂ: "s",
+      ת: "t"
+    },
+    // Gemination is not represented, so drop every geminated consonant
+    onGeminatedConsonant: {
+      "": ""
+    },
+    onVowel: {
+      אְ: "’", אֲ: "a", אַ: "a", אָ: "a", אָה: "a",
+      אֱ: "e", אֶ: "e", אֶה: "e", אֵ: "ei", אֵה: "ei",
+      אֵי: "ei",
+      אִ: "i", אִי: "i",
+      // holem haser for vav (U+05BA) is treated just like holem (U+05B9)
+      אֳ: "o", אׇ: "o", אֹ: "o", אֹו: "o", אֺ: "o", אֺו: "o",
+      אֻ: "u", אוּ: "u"
+    },
+    onHebrewMark: {
+      // Delete anything that's not taamim or punctuation, keep the rest as is
+      "": (m) => (taamimOrPunct.test(m.text) ? m.text : "")
+    },
+    onNonHebrew: {
+      // Keep all non-Hebrew characters as they are
+      "": (n) => n.text
+    }
   };
-  // prettier-ignore
-  #vowels: { [fromStart: string]: string } = {
-    אְ: "’", אֲ: "a", אַ: "a", אָ: "a", אָה: "a",
-    אֱ: "e", אֶ: "e", אֶה: "e", אֵ: "ei", אֵה: "ei",
-    אֵי: "ei",
-    אִ: "i", אִי: "i",
-    אֳ: "o", אׇ: "o", אֹ: "o", אֹו: "o",
-    אֻ: "u", אוּ: "u"
-  };
-  // prettier-ignore
-  #hebrewMarks: { [fromStart: string]: string } = {}
-  #nonHebrew: { [fromStart: string]: string } = {};
   #divineName: DivineNameReplacement = adonaiOrElohim;
 
-  consonantExceptions(c: Consonant): string | undefined {
+  /**
+   * The transliteration of a yod, which is treated as part of the preceding vowel in
+   * certain contexts
+   */
+  private yod(c: Consonant): string {
     if (c.text === "י" && c.partOfCoda && c.syllable) {
       // "ין" suffix as "v" instead of "yv"
       if (c.syllable.coda.length === 2 && c.syllable.coda[1].text === "ו") {
@@ -204,30 +148,7 @@ export class DefaultTransliterationScheme extends TransliterationScheme {
         return "i";
       }
     }
-    return undefined;
-  }
-
-  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-  vowelExceptions(_v: Vowel, _txt: string): string | undefined {
-    // // Final "אָה" as "ah"
-    // if (_txt === "אָה" && _v.syllable && _v.syllable.isFinal && _v.syllable.coda.length === 0) {
-    //   return "ah";
-    // }
-    return undefined;
-  }
-
-  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-  hebrewMarkExceptions(m: HebrewMark, _txt: string): string | undefined {
-    // Delete anything that's not taamim or punctuation
-    if (!taamimOrPunct.test(m.text)) {
-      return "";
-    }
-    return undefined
-  }
-
-  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-  nonHebrewExceptions(_n: NonHebrew): string | undefined {
-    return undefined;
+    return "y";
   }
 
   preprocess(he: string): string {
@@ -251,24 +172,8 @@ export class DefaultTransliterationScheme extends TransliterationScheme {
     return this.#syllableSeparator;
   }
 
-  get gemination(): boolean {
-    return this.#gemination;
-  }
-
-  get consonants(): { [fromStart: string]: string } {
-    return this.#consonants;
-  }
-
-  get vowels(): { [fromStart: string]: string } {
-    return this.#vowels;
-  }
-
-  get hebrewMarks(): { [fromStart: string]: string } {
-    return this.#hebrewMarks;
-  }
-
-  get nonHebrew(): { [fromStart: string]: string } {
-    return this.#nonHebrew;
+  get syllablePartMap(): SyllablePartMap<string> {
+    return this.#syllablePartMap;
   }
 
   get divineName(): DivineNameReplacement {

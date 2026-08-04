@@ -640,7 +640,8 @@ export class Text extends Node<Text, Word> {
    *
    * @returns a one dimensional array of Chars
    *
-   * ```typescript
+   * @example
+   * ```ts
    * const text: Text = new Text("יָד");
    * text.chars;
    * //  [
@@ -659,7 +660,8 @@ export class Text extends Node<Text, Word> {
    *
    * @returns a one dimensional array of Clusters
    *
-   * ```typescript
+   * @example
+   * ```ts
    * const text: Text = new Text("יָד");
    * text.clusters;
    * // [
@@ -689,7 +691,8 @@ export class Text extends Node<Text, Word> {
    *
    * @returns a one dimensional array of Syllables
    *
-   * ```typescript
+   * @example
+   * ```ts
    * const text: Text = new Text("הֲבָרֹות");
    * text.syllables;
    * // [

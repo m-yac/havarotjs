@@ -1,6 +1,6 @@
 import { Cluster } from "./cluster";
 import { Node } from "./node";
-import { Consonant, ConsonantType, HebrewMark, NonHebrew, SyllablePart, Vowel } from "./syllablePart";
+import { Consonant, HebrewMark, NonHebrew, SyllablePart, Vowel } from "./syllablePart";
 import type { ConsonantName, Flip, TaamimName } from "./utils/charMap";
 import { consonantNameToCharMap, taamimNameToCharMap, vowelCharToNameMap, vowelNameToCharMap } from "./utils/charMap";
 import type { DivineNameReplacement } from "./utils/divineName";
@@ -472,7 +472,7 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
 
       // Add a shureq as a new Vowel
       if (cluster.isShureq) {
-        parts.push(new Vowel(chars.slice(0, 2)));
+        parts.push(new Vowel(chars.slice(0, 2), this));
         seenVowel = true;
         chars = chars.slice(2);
       }
@@ -481,7 +481,7 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
       if (cluster.isMater) {
         for (let j = parts.length - 1; j >= 0; j--) {
           if (parts[j] instanceof Vowel) {
-            parts[j] = new Vowel(parts[j].chars.concat([chars[0]]));
+            parts[j] = new Vowel(parts[j].chars.concat([chars[0]]), this);
             seenVowel = true;
             chars = chars.slice(1);
             break;
@@ -495,9 +495,9 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
       // as a new Vowel first, then the he/ayin/het as a new Consonant after
       if (this.isFinal && this.clusters.slice(i + 1).every((c) => c.isNotHebrew || c.isPunctuation)) {
         if (chars.length >= 2 && /\u{05D7}|\u{05E2}/u.test(chars[0].text) && chars[1].text === "\u{05B7}") {
-          parts.push(new Vowel([chars[1]]));
+          parts.push(new Vowel([chars[1]], this));
           seenVowel = true;
-          parts.push(new Consonant([chars[0]], ConsonantType.codaConsonant));
+          parts.push(new Consonant([chars[0]], this, "codaConsonant"));
           chars = chars.slice(2);
         }
         if (
@@ -506,9 +506,9 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
           chars[1].text === "\u{05BC}" &&
           chars[2].text === "\u{05B7}"
         ) {
-          parts.push(new Vowel([chars[2]]));
+          parts.push(new Vowel([chars[2]], this));
           seenVowel = true;
-          parts.push(new Consonant(chars.slice(0, 2), ConsonantType.codaConsonant));
+          parts.push(new Consonant(chars.slice(0, 2), this, "codaConsonant"));
           chars = chars.slice(3);
         }
       }
@@ -516,8 +516,8 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
       for (const char of chars) {
         // Add a consonant character as a new Consonant
         if (char.sequencePosition === 0) {
-          const cType = seenVowel ? ConsonantType.codaConsonant : ConsonantType.onsetConsonant;
-          parts.push(new Consonant([char], cType));
+          const cType = seenVowel ? "codaConsonant" : "onsetConsonant";
+          parts.push(new Consonant([char], this, cType));
         }
         // Add a consonant ligature as an additional character of the preceding
         // Consonant, or if there is no such consonant, as a new HebrewMark
@@ -525,14 +525,14 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
           let success = false;
           for (let j = parts.length - 1; j >= 0; j--) {
             if (parts[j] instanceof Consonant) {
-              const cType = seenVowel ? ConsonantType.codaConsonant : ConsonantType.onsetConsonant;
-              parts[j] = new Consonant(parts[j].chars.concat([char]), cType);
+              const cType = seenVowel ? "codaConsonant" : "onsetConsonant";
+              parts[j] = new Consonant(parts[j].chars.concat([char]), this, cType);
               success = true;
               break;
             }
           }
           if (!success) {
-            parts.push(new HebrewMark([char]));
+            parts.push(new HebrewMark([char], this));
           }
         }
         // Add a niqqud character which is not a sheva nah (a non-vocal sheva,
@@ -540,9 +540,9 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
         // sheva nah as a new HebrewMark
         else if (char.sequencePosition === 3) {
           if (char.text === "\u{05B0}" && i > 0) {
-            parts.push(new HebrewMark([char]));
+            parts.push(new HebrewMark([char], this));
           } else {
-            parts.push(new Vowel([char]));
+            parts.push(new Vowel([char], this));
             seenVowel = true;
           }
         }
@@ -556,20 +556,18 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
         // all of them as NonHebrew. `Cluster.isNotHebrew` tests the block directly, so
         // this keeps char- and cluster-level classification consistent within `parts`.
         else if (hebChars.test(char.text)) {
-          parts.push(new HebrewMark([char]));
+          parts.push(new HebrewMark([char], this));
         }
         // Add anything else as a new NonHebrew SyllablePart
         else {
-          parts.push(new NonHebrew([char]));
+          parts.push(new NonHebrew([char], this));
         }
       }
     }
 
-    // Give every SyllablePart a reference to this Syllable, and compute some
-    // conditions needed for the gemination check below
+    // Compute some conditions needed for the gemination check below
     let [hasNonShevaVowel, hasConsonantAfterVowel] = [false, false];
     for (const part of parts) {
-      part.syllable = this;
       if (part instanceof Vowel && !/\u{05B0}/u.test(part.text)) {
         hasNonShevaVowel = true;
       } else if (hasNonShevaVowel && part instanceof Consonant) {
@@ -595,9 +593,9 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
     ) {
       const geminated = new Consonant(
         next.clusters[0].chars.filter((c) => c.sequencePosition <= 2),
-        ConsonantType.codaGeminatedConsonant
+        this,
+        "codaGeminatedConsonant"
       );
-      geminated.syllable = this;
       return { parts: [...parts, geminated], partsNoGemination: parts };
     }
 
