@@ -128,3 +128,48 @@ describe.each`
     expect(word.syllables.map((syl) => syl.text)).toEqual(syllables);
   });
 });
+
+describe.each`
+  description                     | original         | replaced                  | prefix
+  ${"unprefixed"}                 | ${"יְהוָ֥ה"}     | ${["אֲ", "דֹ", "נָ֥י"]}   | ${null}
+  ${"prefixed, read as one word"} | ${"לַֽיהוָ֖ה"}   | ${["לַֽא", "דֹ", "נָ֖י"]} | ${null}
+  ${"prefixed with a syllable"}   | ${"מֵיְהוָ֖ה"}   | ${["אֲ", "דֹ", "נָ֖י"]}   | ${"מֵ"}
+  ${"prefixed twice"}             | ${"וּמֵיְהוָ֖ה"} | ${["אֲ", "דֹ", "נָ֖י"]}   | ${"מֵ"}
+`("A Syllable Replaces the Divine Name:", ({ description, original, replaced, prefix }) => {
+  const word = new Text(original, { allowNoNiqqud: true }).words[0];
+  const nameSyllable = word.syllables[word.syllables.length - 1];
+  const syllables = nameSyllable.replaceDivineName();
+  const [first, last] = [syllables[0], syllables[syllables.length - 1]];
+
+  describe(`The name ${description}`, () => {
+    test("Is read as the syllables of the replacement", () => {
+      expect(syllables.map((syl) => syl.text)).toEqual(replaced);
+    });
+
+    test("Is read by syllables which belong to the word it stands in", () => {
+      expect(syllables.map((syl) => syl.word)).toEqual(syllables.map(() => word));
+    });
+
+    test(`Is read by syllables the first of which ${prefix ? `follows "${prefix}"` : "begins the word"}`, () => {
+      expect(first.prev?.text ?? null).toEqual(prefix);
+      expect(first.isInitial).toEqual(prefix === null);
+    });
+
+    test("Is read by syllables the last of which ends the word", () => {
+      expect(last.next).toBeNull();
+      expect(last.isFinal).toEqual(true);
+    });
+
+    test("Leaves the syllables of the word as they are", () => {
+      expect(word.syllables).toContain(nameSyllable);
+      expect(word.syllables.some((syl) => syllables.includes(syl))).toEqual(false);
+    });
+  });
+});
+
+describe("A Syllable Left Unchanged:", () => {
+  test("A syllable without the Divine Name is returned as is", () => {
+    const syllable = new Text("אַבְרָ֑ם").syllables[0];
+    expect(syllable.replaceDivineName()).toEqual([syllable]);
+  });
+});

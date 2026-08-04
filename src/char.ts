@@ -7,7 +7,7 @@ import { consonants, dagesh, ligatures, meteg, rafe, sheva, taamim, vowels } fro
  * A Hebrew character and its positioning number for being sequenced correctly.
  * See {@link Cluster } for correct normalization.
  */
-export class Char extends Node<Char, null, Cluster> {
+export class Char extends Node<Char, never, Cluster> {
   #text: string;
   #sequencePosition: number;
   #isCharKeyOfCharToNameMap = isHebrewCharacter;
@@ -94,7 +94,7 @@ export class Char extends Node<Char, null, Cluster> {
    * ```
    */
   get cluster() {
-    return this.parent?.value ?? null;
+    return this.parent;
   }
 
   /**

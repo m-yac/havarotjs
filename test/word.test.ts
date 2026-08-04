@@ -122,10 +122,7 @@ describe("Implements node", () => {
     expect(word.prev).toEqual(null);
   });
   test("next", () => {
-    expect(word.next?.value?.text).toEqual("אָדָ֕ם");
-  });
-  test("value", () => {
-    expect(word.value?.text).toEqual("בֶּן־");
+    expect(word.next?.text).toEqual("אָדָ֕ם");
   });
 });
 

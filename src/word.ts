@@ -80,7 +80,6 @@ export class Word extends Node<Word, Text> {
 
   constructor(text: string, sylOpts: SylOpts, original?: string) {
     super();
-    this.value = this;
     this.#text = text;
     this.#original = original ?? text;
     const startMatch = text.match(/^\s*/g);

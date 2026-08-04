@@ -69,7 +69,6 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
    */
   constructor(clusters: Cluster[], { isClosed = false, isAccented = false }: SyllableParams = {}) {
     super();
-    this.value = this;
     this.#clusters = clusters;
     this.#isClosed = isClosed;
     this.#isAccented = isAccented;
@@ -459,14 +458,8 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
     // have to go backwards (i.e. shift focus to the `prev` syllable) until
     // you reach the start of the word and there are no syllables left
     let posn = 0;
-    let focus = this as Syllable;
-    while (focus.prev !== null) {
-      // Should never happen, so return our error value if `value` is not set
-      if (focus.prev.value === null) {
-        return -1;
-      }
+    for (let syl = this as Syllable; syl.prev !== null; syl = syl.prev) {
       posn++;
-      focus = focus.prev.value;
     }
     return posn;
   }
@@ -917,7 +910,7 @@ export class Syllable extends Node<Syllable, Cluster, Word> {
    * ```
    */
   get word() {
-    return this.parent?.value ?? null;
+    return this.parent;
   }
 
   /**
@@ -965,7 +958,7 @@ export interface SyllableMap<T> {
   onSyllablePart: (acc?: T, p?: SyllablePart) => T;
   /**
    * The function folded over multiple {@link Syllable | Syllables} - either from {@link Word.syllables | syllables} or the result of {@link replaceDivineName} - where `acc` is undefined on the call for the first syllable, and both arguments are undefined when there are no syllables at all
-   * 
+   *
    * @remark
    * Note that {@link divineName} will only have a chance to be applied on `p` if the implementation of this function calls {@link Syllable.apply}
    */

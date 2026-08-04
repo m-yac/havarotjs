@@ -88,7 +88,7 @@ const groupFinal = (arr: Cluster[]): Mixed => {
     !finalCluster.isMater &&
     // if final cluster is an aleph, then the syllable is open (e.g. בָּרָ֣א)
     // unless the preceding cluster has a sheva (e.g. וַיַּ֧רְא)
-    (!/\u{05D0}/u.test(finalCluster.text) || finalCluster?.prev?.value?.hasSheva) &&
+    (!/\u{05D0}/u.test(finalCluster.text) || finalCluster.prev?.hasSheva) &&
     // if the final cluster is an he but without a mappiq, then the syllable is open
     // this applies even to cases where the he is not a mater (e.g. פֹּ֖ה)
     !/\u{05D4}(?!\u{05bc})/u.test(finalCluster.text) &&
@@ -398,7 +398,7 @@ const setIsAccented = (syllable: Syllable) => {
   // TODO: this is pretty hacky, but it works; find a more elegant solution
   const jerusalemFinal = /\u{5B4}\u{05DD}/u;
   const jerusalemPrev = /ל[\u{5B8}\u{5B7}]/u;
-  let prev = syllable.prev?.value;
+  let prev = syllable.prev;
   if (jerusalemFinal.test(syllable.text) && prev && jerusalemPrev.test(prev.text)) {
     prev.isAccented = true;
     return;
@@ -425,7 +425,7 @@ const setIsAccented = (syllable: Syllable) => {
           prev.isAccented = true;
           return;
         }
-        prev = (prev?.prev?.value as Syllable) ?? null;
+        prev = prev?.prev;
       }
     }
 
@@ -450,7 +450,7 @@ const setIsAccented = (syllable: Syllable) => {
           prev.isAccented = true;
           return;
         }
-        prev = (prev?.prev?.value as Syllable) ?? null;
+        prev = prev?.prev;
       }
     }
   }
@@ -474,7 +474,7 @@ const setIsAccented = (syllable: Syllable) => {
       if (pashta.test(prev.text) || qadma.test(prev.text)) {
         return;
       }
-      prev = (prev?.prev?.value as Syllable) ?? null;
+      prev = prev?.prev;
     }
   }
 
@@ -486,7 +486,7 @@ const setIsAccented = (syllable: Syllable) => {
         prev.isAccented = true;
         return;
       }
-      prev = (prev?.prev?.value as Syllable) ?? null;
+      prev = prev?.prev;
     }
 
     syllable.isAccented = true;
@@ -496,14 +496,14 @@ const setIsAccented = (syllable: Syllable) => {
   // prepositive
   const teslishaGedola = /\u{05A0}/u;
   if (teslishaGedola.test(syllable.text)) {
-    let next = syllable.next?.value;
+    let next = syllable.next;
 
     while (next) {
       if (teslishaGedola.test(next.text)) {
         next.isAccented = true;
         return;
       }
-      next = (next?.next?.value as Syllable) ?? null;
+      next = next?.next;
     }
 
     syllable.isAccented = true;
@@ -515,7 +515,7 @@ const setIsAccented = (syllable: Syllable) => {
   const ole = /\u{05AB}/u;
   if (ole.test(syllable.text)) {
     const yored = /\u{05A5}/u;
-    let next = syllable.next?.value;
+    let next = syllable.next;
 
     while (next) {
       if (yored.test(next.text)) {
@@ -523,7 +523,7 @@ const setIsAccented = (syllable: Syllable) => {
         syllable.isAccented = false;
         return;
       }
-      next = (next?.next?.value as Syllable) ?? null;
+      next = next?.next;
     }
 
     syllable.isAccented = true;
@@ -534,7 +534,7 @@ const setIsAccented = (syllable: Syllable) => {
   // so always assume the final syallble is accented
   const dechi = /\u{05AD}/u;
   if (dechi.test(syllable.text)) {
-    let next = syllable.next?.value;
+    let next = syllable.next;
 
     while (next) {
       // if the last syllable, set as accented
@@ -542,7 +542,7 @@ const setIsAccented = (syllable: Syllable) => {
         next.isAccented = true;
         return;
       }
-      next = (next?.next?.value as Syllable) ?? null;
+      next = next?.next;
     }
   }
 

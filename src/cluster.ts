@@ -55,7 +55,6 @@ export class Cluster extends Node<Cluster, Char, Syllable> {
    */
   constructor(cluster: string, noSequence: boolean = false) {
     super();
-    this.value = this;
     this.#original = cluster;
     this.#sequenced = this.#sequence(noSequence);
     this.#sequenced.forEach((char) => (char.parent = this));
@@ -586,7 +585,7 @@ export class Cluster extends Node<Cluster, Char, Syllable> {
    */
   get isShureq() {
     const shureq = /\u{05D5}\u{05BC}/u;
-    const prvHasVowel = this.prev?.value?.hasVowel ?? false;
+    const prvHasVowel = this.prev?.hasVowel;
     return !this.hasVowel && !this.hasSheva && !prvHasVowel ? shureq.test(this.text) : false;
   }
 
@@ -643,7 +642,7 @@ export class Cluster extends Node<Cluster, Char, Syllable> {
    * If created via the <code>{@link Text}</code> class, there should always be a syllable.
    */
   get syllable() {
-    return this.parent?.value ?? null;
+    return this.parent;
   }
 
   /**
